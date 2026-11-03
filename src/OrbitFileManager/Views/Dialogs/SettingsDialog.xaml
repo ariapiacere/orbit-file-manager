@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Orbit Settings &amp; Customization"
         Width="620"
-        Height="610"
+        Height="660"
         MinWidth="560"
         MinHeight="540"
         WindowStartupLocation="CenterOwner"
@@ -50,6 +50,13 @@
                             <CheckBox x:Name="ShowSystemCheck" Content="Show protected operating system files (advanced)" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7" />
                             <CheckBox x:Name="ConfirmRecycleCheck" Content="Ask for confirmation before sending items to Recycle Bin" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7" />
                             <CheckBox x:Name="RestoreTabsCheck" Content="Restore previously open session &amp; tabs on startup" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,14" />
+
+                            <!-- Updates -->
+                            <TextBlock Text="UPDATES" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,8" />
+                            <DockPanel Margin="0,0,0,14">
+                                <TextBlock x:Name="VersionText" DockPanel.Dock="Right" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="CheckUpdatesCheck" Content="Check for updates when Orbit starts" Foreground="{DynamicResource TextPrimaryBrush}" />
+                            </DockPanel>
 
                             <!-- Customizable Toolbar -->
                             <TextBlock Text="CUSTOMIZABLE TOOLBAR" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,8" />

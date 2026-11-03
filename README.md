@@ -131,3 +131,30 @@ Use a disposable test folder (never test destructive operations on production da
    - Open a large directory in **Details** view; verify UI virtualization keeps scrolling smooth, `Ctrl+F` Quick Filter narrows items instantaneously, and switching to **Thumbnails** loads previews asynchronously in the background without freezing navigation.
 8. **Drag-and-Drop**:
    - Reorder tabs via drag-and-drop, drag folders onto the **Favorites** sidebar section to pin them, drag files between Left and Right panes (hold `Ctrl` to force Copy, `Shift` to force Move), and drag files between Orbit and Windows Explorer.
+
+---
+
+## 6. Updates, Source Code & Releases
+
+### Updating Orbit
+
+Orbit checks this repository's [GitHub Releases](https://github.com/ariapiacere/orbit-file-manager/releases) a few seconds after it starts. When a newer version exists, an **Update to x.y.z** button appears at the right of the status bar. You can also use **Tools → Check for Updates...**.
+
+The update window shows the release notes, downloads the portable zip, checks its SHA-256, closes Orbit, copies the new files over the old ones (your `Data`, `Logs` and `Cache` folders are kept) and starts Orbit again. The automatic check can be turned off in **Settings → Updates**.
+
+Orbit can only update itself when it runs from a folder it can write to (the portable layout). A copy inside `Program Files` shows a link to the release page instead.
+
+### Getting the latest code
+
+```powershell
+git clone https://github.com/ariapiacere/orbit-file-manager.git
+cd orbit-file-manager
+git pull        # later: bring your copy up to date
+```
+
+### Releasing a new version
+
+1. Bump `<Version>` in `Directory.Build.props` and commit.
+2. Run `./tools/release.ps1 -Notes "What changed"` (needs the .NET 8 SDK and a logged-in GitHub CLI).
+
+The script runs the tests, publishes the self-contained build, uploads `OrbitFileManager-win-x64-<version>.zip` and its `.sha256` as release `v<version>`, and pushes the tag. Every running copy offers the update on its next start.

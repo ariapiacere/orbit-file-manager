@@ -9,6 +9,7 @@ using OrbitFileManager.Services.Productivity;
 using OrbitFileManager.Services.Search;
 using OrbitFileManager.Services.Settings;
 using OrbitFileManager.Services.Thumbnails;
+using OrbitFileManager.Services.Updates;
 using OrbitFileManager.Utilities;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -36,6 +37,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private readonly ChecksumService _checksumService;
     private readonly DuplicateFinderService _duplicateFinderService;
     private readonly FolderSizeAnalyzerService _folderSizeAnalyzerService;
+    private readonly UpdateService _updateService;
     private readonly IUserDialogService _dialogService;
     private readonly IThemeService _themeService;
     private readonly StructuredLogger _logger;
@@ -151,6 +153,15 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public BrowserTabViewModel? ActiveTab => ActivePane.ActiveTab;
     public BrowserPaneViewModel InactivePane => ReferenceEquals(ActivePane, LeftPane) ? RightPane : LeftPane;
 
+    /// <summary>Newer GitHub release found by the last update check, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUpdateAvailable), nameof(UpdateBadgeText))]
+    private UpdateInfo? _availableUpdate;
+
+    public bool IsUpdateAvailable => AvailableUpdate is not null;
+    public string UpdateBadgeText => AvailableUpdate is null ? string.Empty : $"Update to {UpdateService.Format(AvailableUpdate.Version)}";
+    public string AppVersionText => $"Orbit {UpdateService.Format(UpdateService.CurrentVersion)}";
+
     public string StorageModeBadge => _pathsService.IsPortableWritable ? "Portable" : "AppData";
     public string StorageRootPath => _pathsService.StorageRoot;
 
@@ -162,6 +173,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public event Action? RequestSelectAllInActiveList;
     public event Action? RequestFocusAddressBar;
     public event Action? RequestFocusQuickFilter;
+    /// <summary>Raised after an update installer was started; the window closes so the installer can replace the files.</summary>
+    public event Action? RequestCloseForUpdate;
 
     public MainViewModel(
         AppPathsService pathsService,
@@ -181,6 +194,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ChecksumService checksumService,
         DuplicateFinderService duplicateFinderService,
         FolderSizeAnalyzerService folderSizeAnalyzerService,
+        UpdateService updateService,
         IUserDialogService dialogService,
         IThemeService themeService,
         StructuredLogger logger)
@@ -202,6 +216,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _checksumService = checksumService;
         _duplicateFinderService = duplicateFinderService;
         _folderSizeAnalyzerService = folderSizeAnalyzerService;
+        _updateService = updateService;
         _dialogService = dialogService;
         _themeService = themeService;
         _logger = logger;
@@ -283,7 +298,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         RebindSubscribedActiveTab();
         StatusMessage = "Ready";
-        _logger.Info("App", "Orbit File Manager initialized.", new { dualPane = IsDualPane, portable = _pathsService.IsPortableWritable });
+        _logger.Info("App", "Orbit File Manager initialized.", new { dualPane = IsDualPane, portable = _pathsService.IsPortableWritable, version = UpdateService.Format(UpdateService.CurrentVersion) });
+
+        ReportLastUpdateResult();
+        _ = CheckForUpdatesOnStartupAsync();
     }
 
     partial void OnShowExtensionColumnChanged(bool value) { _settingsService.Current.ShowExtensionColumn = value; _settingsService.Save(); }
@@ -1919,6 +1937,76 @@ public partial class MainViewModel : ObservableObject, IDisposable
         RecentFolders.Clear();
         foreach (string recent in _settingsService.Current.RecentFolders)
             RecentFolders.Add(recent);
+    }
+
+    // ─── Updates ───────────────────────────────────────────────────────────────
+
+    private void ReportLastUpdateResult()
+    {
+        if (_updateService.TakeLastInstallResult() is not { } result)
+            return;
+
+        if (result.Succeeded)
+        {
+            StatusMessage = $"Updated to Orbit {result.Version}.";
+        }
+        else
+        {
+            _dialogService.ShowError(
+                "Update Failed",
+                $"Orbit {result.Version} could not be copied into this folder, so the previous version is still running.\n\nDetails: {UpdateService.InstallLogPath}");
+        }
+    }
+
+    private async Task CheckForUpdatesOnStartupAsync()
+    {
+        if (!_settingsService.Current.CheckForUpdatesOnStartup)
+            return;
+
+        // Let the first folder load finish before going to the network.
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        try
+        {
+            AvailableUpdate = await _updateService.CheckForUpdateAsync();
+            if (AvailableUpdate is not null)
+                StatusMessage = $"Orbit {UpdateService.Format(AvailableUpdate.Version)} is available.";
+        }
+        catch (Exception ex)
+        {
+            // Offline or GitHub unreachable: stay quiet on startup.
+            _logger.Warn("Update", "Startup update check failed.", new { ex.Message });
+        }
+    }
+
+    [RelayCommand]
+    public async Task CheckForUpdatesAsync()
+    {
+        StatusMessage = "Checking for updates...";
+        try
+        {
+            AvailableUpdate = await _updateService.CheckForUpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Update check failed.";
+            _dialogService.ShowError("Check for Updates", $"Could not reach GitHub to check for updates.\n\n{ex.Message}");
+            return;
+        }
+
+        if (AvailableUpdate is null)
+            StatusMessage = $"{AppVersionText} is up to date.";
+        else
+            InstallUpdate();
+    }
+
+    [RelayCommand]
+    public void InstallUpdate()
+    {
+        if (AvailableUpdate is null)
+            return;
+
+        if (_dialogService.ShowUpdateDialog(_updateService, AvailableUpdate))
+            RequestCloseForUpdate?.Invoke();
     }
 
     public void Dispose()

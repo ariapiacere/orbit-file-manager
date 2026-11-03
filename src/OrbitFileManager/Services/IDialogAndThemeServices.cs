@@ -3,6 +3,7 @@ using OrbitFileManager.Services.FileOperations;
 using OrbitFileManager.Services.Productivity;
 using OrbitFileManager.Services.Search;
 using OrbitFileManager.Services.Settings;
+using OrbitFileManager.Services.Updates;
 
 namespace OrbitFileManager.Services;
 
@@ -40,6 +41,9 @@ public interface IUserDialogService
         bool defaultHidden);
 
     string? ShowFolderSizeDialog(FolderSizeAnalyzerService analyzerService, string initialFolder);
+
+    /// <summary>Shows the update offer. Returns true when the update was downloaded and its installer started.</summary>
+    bool ShowUpdateDialog(UpdateService updateService, UpdateInfo update);
 }
 
 public interface IThemeService

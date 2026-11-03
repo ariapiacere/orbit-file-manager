@@ -9,6 +9,7 @@
     <Deterministic>true</Deterministic>
     <Company>Orbit Desktop Labs</Company>
     <Product>Orbit File Manager</Product>
-    <Version>1.0.0</Version>
+    <!-- Release version. tools/release.ps1 publishes it as GitHub release v<Version>; the in-app updater compares against it. -->
+    <Version>1.1.0</Version>
   </PropertyGroup>
 </Project>

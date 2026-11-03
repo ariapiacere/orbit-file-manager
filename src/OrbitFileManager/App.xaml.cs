@@ -7,6 +7,7 @@ using OrbitFileManager.Services.Productivity;
 using OrbitFileManager.Services.Search;
 using OrbitFileManager.Services.Settings;
 using OrbitFileManager.Services.Thumbnails;
+using OrbitFileManager.Services.Updates;
 using OrbitFileManager.ViewModels;
 using System.Windows;
 
@@ -70,6 +71,7 @@ public partial class App : Application
         services.AddSingleton<ChecksumService>();
         services.AddSingleton<DuplicateFinderService>();
         services.AddSingleton<FolderSizeAnalyzerService>();
+        services.AddSingleton<UpdateService>();
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IUserDialogService, WpfUserDialogService>();
         services.AddSingleton<MainViewModel>();

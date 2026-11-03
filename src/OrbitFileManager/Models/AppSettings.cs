@@ -36,6 +36,7 @@ public sealed class AppSettings
     public bool MiniTreeMode { get; set; } = false;
     public bool ConfirmRecycleBinDelete { get; set; } = true;
     public bool RestoreTabsOnStartup { get; set; } = true;
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
 
     // Remembered Details column visibility
     public bool ShowExtensionColumn { get; set; } = true;

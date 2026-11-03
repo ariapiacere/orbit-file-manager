@@ -1,6 +1,7 @@
 using OrbitFileManager.Models;
 using OrbitFileManager.Services;
 using OrbitFileManager.Services.Settings;
+using OrbitFileManager.Services.Updates;
 using OrbitFileManager.Utilities;
 using System.Diagnostics;
 using System.IO;
@@ -34,6 +35,8 @@ public partial class SettingsDialog : Window
         ShowSystemCheck.IsChecked = settings.ShowSystemFiles;
         ConfirmRecycleCheck.IsChecked = settings.ConfirmRecycleBinDelete;
         RestoreTabsCheck.IsChecked = settings.RestoreTabsOnStartup;
+        CheckUpdatesCheck.IsChecked = settings.CheckForUpdatesOnStartup;
+        VersionText.Text = $"Installed version {UpdateService.Format(UpdateService.CurrentVersion)}";
 
         ToolbarLabelsCheck.IsChecked = settings.ShowToolbarTextLabels;
         ToolbarBatchRenameCheck.IsChecked = settings.ShowToolbarBatchRename;
@@ -140,6 +143,7 @@ public partial class SettingsDialog : Window
         _settings.ShowSystemFiles = ShowSystemCheck.IsChecked == true;
         _settings.ConfirmRecycleBinDelete = ConfirmRecycleCheck.IsChecked == true;
         _settings.RestoreTabsOnStartup = RestoreTabsCheck.IsChecked == true;
+        _settings.CheckForUpdatesOnStartup = CheckUpdatesCheck.IsChecked == true;
 
         _settings.ShowToolbarTextLabels = ToolbarLabelsCheck.IsChecked == true;
         _settings.ShowToolbarBatchRename = ToolbarBatchRenameCheck.IsChecked == true;

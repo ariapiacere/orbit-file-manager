@@ -3,6 +3,7 @@ using OrbitFileManager.Services.FileOperations;
 using OrbitFileManager.Services.Productivity;
 using OrbitFileManager.Services.Search;
 using OrbitFileManager.Services.Settings;
+using OrbitFileManager.Services.Updates;
 using OrbitFileManager.Views.Dialogs;
 using System.Windows;
 
@@ -138,6 +139,15 @@ public sealed class WpfUserDialogService : IUserDialogService
             Owner = GetActiveOwnerWindow()
         };
         return dialog.ShowDialog() == true ? dialog.RequestedTabPath : null;
+    }
+
+    public bool ShowUpdateDialog(UpdateService updateService, UpdateInfo update)
+    {
+        var dialog = new UpdateDialog(updateService, update, _themeService.CurrentTheme == AppThemeMode.Dark)
+        {
+            Owner = GetActiveOwnerWindow()
+        };
+        return dialog.ShowDialog() == true;
     }
 
     private static Window? GetActiveOwnerWindow()

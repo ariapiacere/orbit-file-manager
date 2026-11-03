@@ -292,6 +292,8 @@
                                 <Separator />
                                 <MenuItem Header="Compare Dual Panes" Command="{Binding ComparePanesCommand}" IsEnabled="{Binding IsDualPane}" />
                                 <MenuItem Header="Save Current Workspace..." Command="{Binding SaveCurrentWorkspaceCommand}" />
+                                <Separator />
+                                <MenuItem Header="Check for Updates..." Command="{Binding CheckForUpdatesCommand}" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
@@ -987,6 +989,14 @@
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="{Binding UpdateBadgeText}"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Padding="9,1"
+                            FontSize="11"
+                            Margin="0,0,12,0"
+                            Command="{Binding InstallUpdateCommand}"
+                            ToolTip="Download and install the new version"
+                            Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}" />
                     <TextBlock Text="{Binding DriveSpaceSummary}"
                                FontSize="11.5"
                                Foreground="{DynamicResource TextSecondaryBrush}"

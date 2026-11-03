@@ -53,6 +53,7 @@ public partial class MainWindow : Window
         _viewModel.RequestSelectAllInActiveList += () => GetActivePaneControl().SelectAllItems();
         _viewModel.RequestFocusAddressBar += () => GetActivePaneControl().FocusAddressBar();
         _viewModel.RequestFocusQuickFilter += () => GetActivePaneControl().FocusQuickFilter();
+        _viewModel.RequestCloseForUpdate += Close;
         _viewModel.PropertyChanged += OnMainViewModelPropertyChanged;
 
         ToolbarDock.SizeChanged += (_, _) => UpdateToolbarLabelFit();
