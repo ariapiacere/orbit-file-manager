@@ -25,6 +25,11 @@ public partial class BrowserPaneControl : UserControl
     private bool _nameColumnUserSized;
     private bool _isFittingNameColumn;
     private bool _isSyncingSelection;
+    private bool _isMarqueeArmed;
+    private Point _marqueeStartPoint;
+    private ModifierKeys _marqueeModifiers;
+    private List<FileEntryItem> _marqueeBaseSelection = [];
+    private MarqueeSelector? _marquee;
 
     public static readonly DependencyProperty MainVmProperty = DependencyProperty.Register(
         nameof(MainVm),
@@ -57,6 +62,12 @@ public partial class BrowserPaneControl : UserControl
         var widthDescriptor = DependencyPropertyDescriptor.FromProperty(GridViewColumn.WidthProperty, typeof(GridViewColumn));
         foreach (GridViewColumn column in DetailsGridView.Columns)
             widthDescriptor.AddValueChanged(column, OnDetailsColumnWidthChanged);
+
+        foreach (ListView list in new[] { DetailsListView, CompactListView, SmallIconsListView, LargeIconsListView, ThumbnailsListView })
+        {
+            list.PreviewMouseLeftButtonUp += FileListView_PreviewMouseLeftButtonUp;
+            list.LostMouseCapture += FileListView_LostMouseCapture;
+        }
     }
 
     private void OnPaneDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -581,9 +592,13 @@ public partial class BrowserPaneControl : UserControl
         if (sender is not ListView lv)
             return;
 
+        var source = e.OriginalSource as DependencyObject;
+        var clickedItem = FindAncestor<ListViewItem>(source);
+        bool armed = e.ChangedButton == MouseButton.Left
+            ? ArmMarquee(lv, e.GetPosition(lv), source, Keyboard.Modifiers)
+            : _isMarqueeArmed = false;
         _fileDragStartPoint = e.GetPosition(lv);
-        var clickedItem = FindAncestor<ListViewItem>(e.OriginalSource as DependencyObject);
-        _isFileMouseDownOnItem = clickedItem is not null;
+        _isFileMouseDownOnItem = clickedItem is not null && !armed;
 
         if (e.ChangedButton == MouseButton.Middle &&
             clickedItem?.DataContext is FileEntryItem { IsDirectory: true } folder)
@@ -595,15 +610,171 @@ public partial class BrowserPaneControl : UserControl
 
         if (e.ChangedButton == MouseButton.Left &&
             clickedItem is null &&
-            FindAncestor<ScrollBar>(e.OriginalSource as DependencyObject) is null &&
-            FindAncestor<GridViewColumnHeader>(e.OriginalSource as DependencyObject) is null)
+            !IsOnListChrome(source) &&
+            (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == 0)
         {
             lv.SelectedItems.Clear();
         }
     }
 
+    // ─── Rectangle (Marquee) Selection ─────────────────────────────────────────
+
+    /// <summary>
+    /// Arms a selection rectangle for a left press that is not meant to drag files: on empty space in any view, or
+    /// in Details on any column but Name (dragging the Name cell still moves the files), like Explorer.
+    /// </summary>
+    private bool ArmMarquee(ListView lv, Point position, DependencyObject? source, ModifierKeys modifiers)
+    {
+        _isMarqueeArmed = false;
+        if (IsOnListChrome(source))
+            return false;
+
+        if (FindAncestor<ListViewItem>(source) is not null &&
+            (!ReferenceEquals(lv, DetailsListView) || IsInNameCell(source)))
+        {
+            return false;
+        }
+
+        _isMarqueeArmed = true;
+        _marqueeStartPoint = position;
+        _marqueeModifiers = modifiers;
+        // Snapshot before the row under the pointer reacts to the press, so Ctrl toggles against the old selection.
+        _marqueeBaseSelection = lv.SelectedItems.OfType<FileEntryItem>().ToList();
+        return true;
+    }
+
+    /// <summary>Starts the rectangle once the pointer has moved far enough, then follows it. True while it is active.</summary>
+    private bool TrackMarquee(ListView lv, Point position, bool leftButtonPressed)
+    {
+        if (_marquee is not null)
+        {
+            if (leftButtonPressed)
+                _marquee.Update(position);
+            else
+                FinishMarquee(lv);
+            return true;
+        }
+
+        if (!_isMarqueeArmed)
+            return false;
+
+        if (!leftButtonPressed)
+        {
+            _isMarqueeArmed = false;
+            return false;
+        }
+
+        Vector moved = position - _marqueeStartPoint;
+        if (Math.Abs(moved.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(moved.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return false;
+        }
+
+        _isMarqueeArmed = false;
+        // Capture before the marquee exists: re-capturing can raise LostMouseCapture, which ends an active marquee.
+        lv.CaptureMouse();
+        _marquee = MarqueeSelector.Begin(
+            lv,
+            _marqueeStartPoint,
+            byRows: ReferenceEquals(lv, DetailsListView),
+            _marqueeModifiers,
+            _marqueeBaseSelection,
+            items => ApplyMarqueeSelection(lv, items));
+
+        if (_marquee is null)
+        {
+            lv.ReleaseMouseCapture();
+            return false;
+        }
+
+        _marquee.Update(position);
+        return true;
+    }
+
+    private bool FinishMarquee(ListView lv)
+    {
+        _isMarqueeArmed = false;
+        if (_marquee is null)
+            return false;
+
+        MarqueeSelector marquee = _marquee;
+        _marquee = null;
+        marquee.End();
+        if (lv.IsMouseCaptured)
+            lv.ReleaseMouseCapture();
+
+        if (PaneVm?.IsActivePane == true)
+            MainVm?.NotifyActiveSelectionChanged();
+        return true;
+    }
+
+    /// <summary>Shows <paramref name="items"/> as the list's selection and pushes it to the tab in one step.</summary>
+    private void ApplyMarqueeSelection(ListView lv, List<FileEntryItem> items)
+    {
+        if (PaneVm?.ActiveTab is not { } tab)
+            return;
+
+        var wanted = new HashSet<FileEntryItem>(items);
+        _isSyncingSelection = true;
+        try
+        {
+            for (int i = lv.SelectedItems.Count - 1; i >= 0; i--)
+            {
+                if (lv.SelectedItems[i] is not FileEntryItem item || !wanted.Contains(item))
+                    lv.SelectedItems.RemoveAt(i);
+            }
+
+            var shown = lv.SelectedItems.OfType<FileEntryItem>().ToHashSet();
+            foreach (FileEntryItem item in items)
+            {
+                if (!shown.Contains(item))
+                    lv.SelectedItems.Add(item);
+            }
+        }
+        finally
+        {
+            _isSyncingSelection = false;
+        }
+
+        tab.UpdateSelection(items);
+    }
+
+    private void FileListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListView lv && FinishMarquee(lv))
+            e.Handled = true;
+    }
+
+    private void FileListView_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        // Capture taken away mid-drag (Alt+Tab, a dialog): keep what is selected so far.
+        if (sender is ListView lv && ReferenceEquals(e.OriginalSource, lv))
+            FinishMarquee(lv);
+    }
+
+    private static bool IsOnListChrome(DependencyObject? source) =>
+        FindAncestor<ScrollBar>(source) is not null || FindAncestor<GridViewColumnHeader>(source) is not null;
+
+    private static bool IsInNameCell(DependencyObject? source)
+    {
+        for (DependencyObject? current = source; current is not null and not ListViewItem; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is FrameworkElement { Name: "NameCell" })
+                return true;
+        }
+        return false;
+    }
+
     private void FileListView_PreviewMouseMove(object sender, MouseEventArgs e)
     {
+        if (sender is ListView marqueeList && TrackMarquee(marqueeList, e.GetPosition(marqueeList), e.LeftButton == MouseButtonState.Pressed))
+        {
+            // Keeps the list's own drag-to-extend selection and the file drag below from running.
+            e.Handled = true;
+            return;
+        }
+
         if (!_isFileMouseDownOnItem ||
             e.LeftButton != MouseButtonState.Pressed ||
             sender is not ListView lv ||

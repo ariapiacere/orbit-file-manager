@@ -432,8 +432,9 @@
                                 </GridViewColumn.Header>
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate>
-                                        <!-- DockPanel (not StackPanel) so the name gets a bounded width and can show an ellipsis -->
-                                        <DockPanel Opacity="{Binding IsCutPending, Converter={StaticResource CutOpacity}}">
+                                        <!-- DockPanel (not StackPanel) so the name gets a bounded width and can show an ellipsis.
+                                             Named: a drag that starts here moves files, one on another column draws a selection rectangle. -->
+                                        <DockPanel x:Name="NameCell" Opacity="{Binding IsCutPending, Converter={StaticResource CutOpacity}}">
                                             <Ellipse DockPanel.Dock="Left"
                                                      Width="7" Height="7"
                                                      Fill="{Binding ColorTagHex, Converter={StaticResource HexToBrush}}"
