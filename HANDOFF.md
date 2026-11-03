@@ -40,7 +40,9 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
   in light mode. Accent buttons use dark ink (`AccentForegroundBrush` `#1A1108`). Danger is rose so it never
   reads as the accent.
 - Signature: the selected row shows an orange rail on its leading edge (in `ModernFileListItemStyle`) instead
-  of an outline box. The active tab gets the same rail on top. The active-pane line only shows in dual-pane mode.
+  of an outline box. The selected tab of the active pane glows orange (`ActiveTabGlowBrush` /
+  `ActiveTabGlowBorderBrush`, fading into the toolbar colour). In dual-pane mode the other pane's selected tab
+  stays plain, so the glow also marks the active pane; there is no full-width active-pane line any more.
 - Toolbar: navigation, view modes and panel toggles sit in recessed segments (`ToolbarSegmentStyle`).
   Size/date columns use tabular numerals. Drive bars turn rose at 90%+ usage (`DriveEntryItem.IsNearlyFull`).
 - Logo: a folder circled by a tilted orbit ring with a satellite. Shapes `Logo*` in `Resources/Icons.xaml`;

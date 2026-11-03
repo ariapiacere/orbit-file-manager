@@ -19,6 +19,17 @@
     <SolidColorBrush x:Key="ActiveTabBackgroundBrush" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="InactiveTabBackgroundBrush" Color="#FFEFEFF1" />
 
+    <!-- Active tab of the active pane: orange wash at the top fading into white (see DarkTheme.xaml) -->
+    <LinearGradientBrush x:Key="ActiveTabGlowBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFFDC9A3" Offset="0" />
+        <GradientStop Color="#FFFEE6D3" Offset="0.4" />
+        <GradientStop Color="#FFFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ActiveTabGlowBorderBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFEA580C" Offset="0" />
+        <GradientStop Color="#FFD4D4D8" Offset="1" />
+    </LinearGradientBrush>
+
     <SolidColorBrush x:Key="SelectedRowBackgroundBrush" Color="#FFFFEDD5" />
     <SolidColorBrush x:Key="SelectedRowBorderBrush" Color="#FFEA580C" />
 

@@ -19,6 +19,18 @@
     <SolidColorBrush x:Key="ActiveTabBackgroundBrush" Color="#FF26221F" />
     <SolidColorBrush x:Key="InactiveTabBackgroundBrush" Color="#FF181715" />
 
+    <!-- Active tab of the active pane: orange glow at the top fading into the toolbar colour, so the tab
+         flows into the address bar below it. Stops are pre-blended (opaque) to avoid muddy alpha mixing. -->
+    <LinearGradientBrush x:Key="ActiveTabGlowBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FF8A4719" Offset="0" />
+        <GradientStop Color="#FF4A2C18" Offset="0.35" />
+        <GradientStop Color="#FF1B1A18" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ActiveTabGlowBorderBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFFF7A1A" Offset="0" />
+        <GradientStop Color="#FF3B3732" Offset="1" />
+    </LinearGradientBrush>
+
     <SolidColorBrush x:Key="SelectedRowBackgroundBrush" Color="#FF35230F" />
     <SolidColorBrush x:Key="SelectedRowBorderBrush" Color="#FFFF7A1A" />
 

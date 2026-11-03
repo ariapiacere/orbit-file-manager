@@ -98,25 +98,8 @@
         </ContextMenu>
     </UserControl.Resources>
 
-    <Border x:Name="ActivePaneFrame"
-            BorderThickness="0,2,0,0"
-            Background="{DynamicResource BrowserBackgroundBrush}">
-        <Border.Style>
-            <Style TargetType="{x:Type Border}">
-                <Setter Property="BorderBrush" Value="Transparent" />
-                <Style.Triggers>
-                    <!-- Only meaningful with two panes; in single-pane mode it just doubled the active tab's rail -->
-                    <MultiDataTrigger>
-                        <MultiDataTrigger.Conditions>
-                            <Condition Binding="{Binding IsActivePane}" Value="True" />
-                            <Condition Binding="{Binding MainVm.IsDualPane, ElementName=PaneRoot}" Value="True" />
-                        </MultiDataTrigger.Conditions>
-                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-                    </MultiDataTrigger>
-                </Style.Triggers>
-            </Style>
-        </Border.Style>
-
+    <!-- The active pane is marked by the orange glow on its selected tab (see the tab template below) -->
+    <Border Background="{DynamicResource BrowserBackgroundBrush}">
         <Grid>
             <Grid.RowDefinitions>
                 <!-- Row 0: Pane Tab Strip -->
@@ -249,15 +232,6 @@
                                                         </Button>
                                                     </Grid>
                                                 </Border>
-                                                <!-- Active tab: orange rail along the top edge, same language as the selected-row rail -->
-                                                <Border x:Name="TabRail"
-                                                        Height="2"
-                                                        Margin="6,0"
-                                                        VerticalAlignment="Top"
-                                                        CornerRadius="1"
-                                                        Background="{DynamicResource AccentBrush}"
-                                                        IsHitTestVisible="False"
-                                                        Visibility="Collapsed" />
                                             </Grid>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
@@ -267,10 +241,19 @@
                                                 <Trigger Property="IsSelected" Value="True">
                                                     <Setter TargetName="TabPill" Property="Background" Value="{DynamicResource ToolbarBackgroundBrush}" />
                                                     <Setter TargetName="TabPill" Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
-                                                    <Setter TargetName="TabRail" Property="Visibility" Value="Visible" />
                                                     <Setter TargetName="TabTitleText" Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                                                     <Setter TargetName="TabTitleText" Property="FontWeight" Value="SemiBold" />
                                                 </Trigger>
+                                                <!-- Selected tab of the active pane glows orange; in dual-pane mode the other
+                                                     pane's selected tab stays plain, so the glow also shows which pane is active -->
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True" />
+                                                        <Condition Binding="{Binding DataContext.IsActivePane, RelativeSource={RelativeSource AncestorType={x:Type ListBox}}}" Value="True" />
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter TargetName="TabPill" Property="Background" Value="{DynamicResource ActiveTabGlowBrush}" />
+                                                    <Setter TargetName="TabPill" Property="BorderBrush" Value="{DynamicResource ActiveTabGlowBorderBrush}" />
+                                                </MultiDataTrigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Setter.Value>
