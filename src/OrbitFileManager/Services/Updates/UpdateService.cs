@@ -32,12 +32,15 @@ public sealed class UpdateService
     public const string RepositoryName = "orbit-file-manager";
     public const string PackagePrefix = "OrbitFileManager-win-x64-";
     public const string ReleasesPageUrl = $"https://github.com/{RepositoryOwner}/{RepositoryName}/releases";
+    private const string LatestReleasePageUrl = $"{ReleasesPageUrl}/latest";
     private const string LatestReleaseApiUrl = $"https://api.github.com/repos/{RepositoryOwner}/{RepositoryName}/releases/latest";
+    private const string NotesUnavailable = "GitHub is limiting requests from this network right now, so the release notes could not be loaded. Use Release page to see what's new.";
 
     /// <summary>Version of the running build (the Version in Directory.Build.props).</summary>
     public static Version CurrentVersion { get; } = Normalize(typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0));
 
-    private static readonly HttpClient Http = CreateHttpClient();
+    private static readonly HttpClient Http = CreateHttpClient(allowRedirects: true);
+    private static readonly HttpClient NoRedirectHttp = CreateHttpClient(allowRedirects: false);
 
     private readonly AppPathsService _paths;
     private readonly StructuredLogger _logger;
@@ -57,7 +60,90 @@ public sealed class UpdateService
 
     public static string Format(Version version) => $"{version.Major}.{version.Minor}.{Math.Max(0, version.Build)}";
 
+    /// <summary>
+    /// GitHub allows 60 API calls an hour per IP without a token, and every PC behind the office IP shares them.
+    /// The web redirect /releases/latest → /releases/tag/{tag} is not counted, so it is asked first and the API
+    /// (which has the release notes) is only called when a newer version exists. If the API is refused, the update
+    /// is built from the tag and the release's fixed download URLs instead.
+    /// </summary>
     public async Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
+    {
+        string? latestTag = await TryGetLatestTagAsync(cancellationToken);
+        if (latestTag is null)
+            return await CheckWithApiAsync(cancellationToken); // redirect unavailable: the API is the only source
+
+        if (!TryParseVersion(latestTag, out Version? latest) || latest <= CurrentVersion)
+            return null;
+
+        try
+        {
+            UpdateInfo? fromApi = await CheckWithApiAsync(cancellationToken);
+            if (fromApi is not null)
+                return fromApi;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Warn("Update", "GitHub API refused the update check; using the release page instead.", new { ex.StatusCode, ex.Message });
+        }
+
+        UpdateInfo? update = FromReleaseTag(latestTag, CurrentVersion);
+        if (update is null)
+            return null;
+
+        // tools/release.ps1 uploads both files together; a missing checksum means the release is not complete yet.
+        using HttpResponseMessage checksum = await Http.GetAsync(update.ChecksumUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        return checksum.IsSuccessStatusCode ? update : null;
+    }
+
+    private static async Task<string?> TryGetLatestTagAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using HttpResponseMessage response = await NoRedirectHttp.GetAsync(LatestReleasePageUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            return TryParseReleaseTag(response.Headers.Location, out string? tag) ? tag : null;
+        }
+        catch (HttpRequestException)
+        {
+            return null; // fall back to the API alone
+        }
+    }
+
+    /// <summary>Reads the tag from the /releases/tag/{tag} address that /releases/latest redirects to.</summary>
+    public static bool TryParseReleaseTag(Uri? location, [NotNullWhen(true)] out string? tag)
+    {
+        tag = null;
+        if (location is null)
+            return false;
+
+        const string marker = "/releases/tag/";
+        string path = location.IsAbsoluteUri ? location.AbsolutePath : location.OriginalString;
+        int index = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+            return false; // no release yet: GitHub redirects to /releases
+
+        string value = Uri.UnescapeDataString(path[(index + marker.Length)..].TrimEnd('/'));
+        if (value.Length == 0)
+            return false;
+
+        tag = value;
+        return true;
+    }
+
+    /// <summary>
+    /// Builds the update from a release tag alone, using GitHub's fixed asset download addresses. Used when the API
+    /// is unavailable, so there are no release notes and the package size is unknown.
+    /// </summary>
+    public static UpdateInfo? FromReleaseTag(string tag, Version current)
+    {
+        if (!TryParseVersion(tag, out Version? version) || version <= Normalize(current))
+            return null;
+
+        string escapedTag = Uri.EscapeDataString(tag);
+        string packageUrl = $"{ReleasesPageUrl}/download/{escapedTag}/{PackagePrefix}{Format(version)}.zip";
+        return new UpdateInfo(version, NotesUnavailable, $"{ReleasesPageUrl}/tag/{escapedTag}", packageUrl, 0, packageUrl + ".sha256");
+    }
+
+    private static async Task<UpdateInfo?> CheckWithApiAsync(CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, LatestReleaseApiUrl);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
@@ -267,9 +353,9 @@ public sealed class UpdateService
 
     private static Version Normalize(Version version) => new(version.Major, version.Minor, Math.Max(0, version.Build));
 
-    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateHttpClient(bool allowRedirects)
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = allowRedirects }) { Timeout = TimeSpan.FromMinutes(10) };
         // GitHub's API rejects requests without a User-Agent.
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("OrbitFileManager", Format(CurrentVersion)));
         return client;

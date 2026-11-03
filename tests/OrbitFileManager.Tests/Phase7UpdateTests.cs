@@ -75,4 +75,45 @@ public sealed class Phase7UpdateTests
     {
         Assert.False(UpdateService.TryParseVersion("latest", out _));
     }
+
+    [Theory]
+    [InlineData("https://github.com/ariapiacere/orbit-file-manager/releases/tag/v1.1.1", "v1.1.1")]
+    [InlineData("/ariapiacere/orbit-file-manager/releases/tag/v2.0.0/", "v2.0.0")]
+    public void TryParseReleaseTag_ReadsTagFromLatestRedirect(string location, string expected)
+    {
+        Assert.True(UpdateService.TryParseReleaseTag(new Uri(location, UriKind.RelativeOrAbsolute), out string? tag));
+        Assert.Equal(expected, tag);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/ariapiacere/orbit-file-manager/releases")]
+    [InlineData("https://github.com/ariapiacere/orbit-file-manager/releases/tag/")]
+    public void TryParseReleaseTag_NoTag_ReturnsFalse(string location)
+    {
+        Assert.False(UpdateService.TryParseReleaseTag(new Uri(location), out _));
+        Assert.False(UpdateService.TryParseReleaseTag(null, out _));
+    }
+
+    [Fact]
+    public void FromReleaseTag_NewerVersion_UsesFixedDownloadUrls()
+    {
+        UpdateInfo? update = UpdateService.FromReleaseTag("v1.2.0", new Version(1, 1, 0));
+
+        Assert.NotNull(update);
+        Assert.Equal(new Version(1, 2, 0), update!.Version);
+        Assert.Equal("https://github.com/ariapiacere/orbit-file-manager/releases/download/v1.2.0/OrbitFileManager-win-x64-1.2.0.zip", update.PackageUrl);
+        Assert.Equal(update.PackageUrl + ".sha256", update.ChecksumUrl);
+        Assert.Equal("https://github.com/ariapiacere/orbit-file-manager/releases/tag/v1.2.0", update.ReleasePageUrl);
+        Assert.Equal(0, update.PackageSize);
+        Assert.False(string.IsNullOrWhiteSpace(update.Notes));
+    }
+
+    [Theory]
+    [InlineData("v1.1.0")]
+    [InlineData("v1.0.9")]
+    [InlineData("latest")]
+    public void FromReleaseTag_SameOlderOrInvalid_ReturnsNull(string tag)
+    {
+        Assert.Null(UpdateService.FromReleaseTag(tag, new Version(1, 1, 0)));
+    }
 }

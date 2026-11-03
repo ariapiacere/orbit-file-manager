@@ -144,6 +144,8 @@ The update window shows the release notes, downloads the portable zip, checks it
 
 Orbit can only update itself when it runs from a folder it can write to (the portable layout). A copy inside `Program Files` shows a link to the release page instead.
 
+GitHub allows 60 API requests an hour per network without a token, shared by every PC behind the same public IP. Orbit therefore reads the latest version from the `releases/latest` page first and only calls the API when a newer version exists. If the API refuses, the update still installs from the release's download links; the update window then points to the release page for the notes.
+
 ### Getting the latest code
 
 ```powershell
