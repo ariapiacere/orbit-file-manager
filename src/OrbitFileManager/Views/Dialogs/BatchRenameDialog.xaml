@@ -1,0 +1,182 @@
+<Window x:Class="OrbitFileManager.Views.Dialogs.BatchRenameDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Orbit Batch Rename"
+        Width="940"
+        Height="620"
+        MinWidth="740"
+        MinHeight="500"
+        WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="Segoe UI">
+
+    <Grid Margin="18">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Column: Rename Rules -->
+        <Border Grid.Column="0"
+                Background="{DynamicResource ElevatedSurfaceBrush}"
+                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="14">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="RENAME RULES" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,10" />
+
+                    <TextBlock Text="Base Name Override (optional)" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <TextBox x:Name="BaseNameBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,10" TextChanged="RuleChanged" ToolTip="Leave empty to keep original base names, or enter e.g. 'Character' to rename all items uniformly." />
+
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Add Prefix" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                            <TextBox x:Name="PrefixBox" Style="{StaticResource ModernTextBoxStyle}" TextChanged="RuleChanged" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Add Suffix" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                            <TextBox x:Name="SuffixBox" Style="{StaticResource ModernTextBoxStyle}" TextChanged="RuleChanged" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Find Text / Pattern" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <TextBox x:Name="FindBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,8" TextChanged="RuleChanged" />
+
+                    <TextBlock Text="Replace With" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <TextBox x:Name="ReplaceBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,8" TextChanged="RuleChanged" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                        <CheckBox x:Name="UseRegexCheck" Content="Use Regex" Margin="0,0,14,0" Checked="RuleToggleChanged" Unchecked="RuleToggleChanged" />
+                        <CheckBox x:Name="CaseSensitiveCheck" Content="Match Case" Checked="RuleToggleChanged" Unchecked="RuleToggleChanged" />
+                    </StackPanel>
+
+                    <TextBlock Text="Remove Characters (e.g. _-)" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <TextBox x:Name="RemoveCharsBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,10" TextChanged="RuleChanged" />
+
+                    <TextBlock Text="Capitalization" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                    <ComboBox x:Name="CaseCombo" SelectedIndex="0" Margin="0,0,0,12" SelectionChanged="CaseCombo_SelectionChanged">
+                        <ComboBoxItem Content="Keep Original" />
+                        <ComboBoxItem Content="lowercase" />
+                        <ComboBoxItem Content="UPPERCASE" />
+                        <ComboBoxItem Content="Title Case" />
+                        <ComboBoxItem Content="Sentence case" />
+                    </ComboBox>
+
+                    <CheckBox x:Name="NumberingCheck" Content="Add Sequential Numbering" FontWeight="SemiBold" Margin="0,0,0,8" Checked="RuleToggleChanged" Unchecked="RuleToggleChanged" />
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Start" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox x:Name="NumStartBox" Text="1" Style="{StaticResource ModernTextBoxStyle}" TextChanged="RuleChanged" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Step" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox x:Name="NumStepBox" Text="1" Style="{StaticResource ModernTextBoxStyle}" TextChanged="RuleChanged" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="Digits" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox x:Name="NumDigitsBox" Text="3" Style="{StaticResource ModernTextBoxStyle}" TextChanged="RuleChanged" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="6">
+                            <TextBlock Text="Sep" FontSize="10.5" Foreground="{DynamicResource TextMutedBrush}" />
+                            <TextBox x:Name="NumSepBox" Text="_" Style="{StaticResource ModernTextBoxStyle}" TextChanged="RuleChanged" />
+                        </StackPanel>
+                    </Grid>
+
+                    <CheckBox x:Name="PreserveExtCheck" Content="Preserve file extensions" IsChecked="True" Checked="RuleToggleChanged" Unchecked="RuleToggleChanged" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Right Column: Validated Two-Column Preview (Original Name | New Name | Status) -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <TextBlock Text="PREVIEW (ORIGINAL NAME  →  NEW NAME)" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" />
+                <TextBlock x:Name="PlanSummaryText" DockPanel.Dock="Right" FontSize="12" HorizontalAlignment="Right" Foreground="{DynamicResource TextSecondaryBrush}" />
+            </DockPanel>
+
+            <Border Grid.Row="1"
+                    Background="{DynamicResource BrowserBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    ClipToBounds="True">
+                <ListView x:Name="PreviewListView"
+                          Background="Transparent"
+                          BorderThickness="0"
+                          ItemContainerStyle="{StaticResource ModernFileListItemStyle}">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Original Name" Width="200">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding OriginalName}" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="New Name" Width="210">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding NewName}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                            <GridViewColumn Header="Validation" Width="140">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding StatusMessage}" FontSize="11.5" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </Border>
+
+            <DockPanel Grid.Row="2" Margin="0,14,0,0">
+                <TextBlock x:Name="ErrorBannerText" Foreground="{DynamicResource DangerBrush}" FontSize="12" VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Cancel" IsCancel="True" Style="{StaticResource SecondaryButtonStyle}" MinWidth="88" Margin="0,0,8,0" />
+                    <Button x:Name="ApplyBtn" Content="Apply Batch Rename" IsDefault="True" Style="{StaticResource AccentButtonStyle}" MinWidth="150" Click="ApplyBtn_Click" />
+                </StackPanel>
+            </DockPanel>
+        </Grid>
+    </Grid>
+</Window>

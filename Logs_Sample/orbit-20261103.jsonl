@@ -1,0 +1,7 @@
+{"timestamp":"2026-11-03T11:44:16.7577971\u002B07:00","level":"INFO","category":"App","message":"Orbit File Manager initialized.","exceptionType":null,"exceptionMessage":null,"context":{"dualPane":false,"portable":true}}
+{"timestamp":"2026-11-03T11:44:51.5566655\u002B07:00","level":"INFO","category":"App","message":"Orbit File Manager initialized.","exceptionType":null,"exceptionMessage":null,"context":{"dualPane":false,"portable":true}}
+{"timestamp":"2026-11-03T11:46:03.0231509\u002B07:00","level":"INFO","category":"App","message":"Orbit File Manager initialized.","exceptionType":null,"exceptionMessage":null,"context":{"dualPane":false,"portable":true}}
+{"timestamp":"2026-11-03T11:54:08.9158617\u002B07:00","level":"INFO","category":"App","message":"Orbit File Manager initialized.","exceptionType":null,"exceptionMessage":null,"context":{"dualPane":false,"portable":true}}
+{"timestamp":"2026-11-03T12:00:27.7520368\u002B07:00","level":"INFO","category":"App","message":"Orbit File Manager initialized.","exceptionType":null,"exceptionMessage":null,"context":{"dualPane":false,"portable":true}}
+{"timestamp":"2026-11-03T12:56:27.6264856\u002B07:00","level":"INFO","category":"App","message":"Orbit File Manager initialized.","exceptionType":null,"exceptionMessage":null,"context":{"dualPane":false,"portable":true}}
+{"timestamp":"2026-11-03T12:56:48.3979347\u002B07:00","level":"ERROR","category":"App","message":"Unhandled UI exception.","exceptionType":"ObjectDisposedException","exceptionMessage":"The CancellationTokenSource has been disposed.","context":null}

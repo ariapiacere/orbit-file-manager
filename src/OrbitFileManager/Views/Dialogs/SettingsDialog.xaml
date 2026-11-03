@@ -1,0 +1,162 @@
+<Window x:Class="OrbitFileManager.Views.Dialogs.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Orbit Settings &amp; Customization"
+        Width="620"
+        Height="610"
+        MinWidth="560"
+        MinHeight="540"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="Segoe UI">
+
+    <Border Padding="20" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Text="Application Preferences &amp; Customization"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,12" />
+
+            <TabControl Grid.Row="1"
+                        Background="Transparent"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        Foreground="{DynamicResource TextPrimaryBrush}">
+
+                <!-- TAB 1: GENERAL & TOOLBAR -->
+                <TabItem Header="  General &amp; Toolbar  " Padding="8,4">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8,12,8,4">
+                        <StackPanel>
+                            <!-- Theme -->
+                            <TextBlock Text="APPEARANCE" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                <RadioButton x:Name="DarkThemeRadio" Content="Dark Mode (Graphite)" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,20,0" VerticalContentAlignment="Center" />
+                                <RadioButton x:Name="LightThemeRadio" Content="Light Mode (Daylight)" Foreground="{DynamicResource TextPrimaryBrush}" VerticalContentAlignment="Center" />
+                            </StackPanel>
+
+                            <!-- File Visibility & Safety -->
+                            <TextBlock Text="BROWSING &amp; SAFETY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,8" />
+                            <CheckBox x:Name="ShowHiddenCheck" Content="Show hidden files and folders" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7" />
+                            <CheckBox x:Name="ShowSystemCheck" Content="Show protected operating system files (advanced)" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7" />
+                            <CheckBox x:Name="ConfirmRecycleCheck" Content="Ask for confirmation before sending items to Recycle Bin" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,7" />
+                            <CheckBox x:Name="RestoreTabsCheck" Content="Restore previously open session &amp; tabs on startup" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,14" />
+
+                            <!-- Customizable Toolbar -->
+                            <TextBlock Text="CUSTOMIZABLE TOOLBAR" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,8" />
+                            <WrapPanel Margin="0,0,0,12">
+                                <CheckBox x:Name="ToolbarLabelsCheck" Content="Show button text labels" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,18,7" />
+                                <CheckBox x:Name="ToolbarBatchRenameCheck" Content="Batch Rename button" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,18,7" />
+                                <CheckBox x:Name="ToolbarSearchCheck" Content="Search button" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,18,7" />
+                                <CheckBox x:Name="ToolbarDualPaneCheck" Content="Dual-Pane button" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,18,7" />
+                                <CheckBox x:Name="ToolbarToolsMenuCheck" Content="Tools menu button" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,18,7" />
+                            </WrapPanel>
+
+                            <!-- Startup Folder -->
+                            <TextBlock Text="DEFAULT START FOLDER" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,6" />
+                            <TextBox x:Name="DefaultPathBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,6" />
+                            <TextBlock x:Name="PathErrorText" Foreground="{DynamicResource DangerBrush}" FontSize="11.5" Visibility="Collapsed" Margin="0,0,0,8" />
+
+                            <!-- Portable Data Location -->
+                            <Border Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,8,0,0">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Open Data Folder"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Padding="10,4"
+                                            Margin="10,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Click="OpenStorageFolder_Click" />
+                                    <StackPanel>
+                                        <TextBlock x:Name="StorageModeHeader" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                                        <TextBlock x:Name="StoragePathText" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <!-- TAB 2: KEYBOARD SHORTCUTS -->
+                <TabItem Header="  Keyboard Shortcuts  " Padding="8,4">
+                    <Grid Margin="6,10,6,4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0"
+                                Background="{DynamicResource BrowserBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <ListView x:Name="ShortcutsListView"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      Foreground="{DynamicResource TextPrimaryBrush}"
+                                      ItemContainerStyle="{StaticResource ModernFileListItemStyle}"
+                                      SelectionChanged="ShortcutsListView_SelectionChanged">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="Action" Width="310" DisplayMemberBinding="{Binding DisplayName}" />
+                                        <GridViewColumn Header="Assigned Shortcut" Width="210" DisplayMemberBinding="{Binding FormattedGesture}" />
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Border>
+
+                        <Border Grid.Row="1"
+                                Background="{DynamicResource InputBackgroundBrush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10"
+                                Margin="0,10,0,0">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,6">
+                                    <Button DockPanel.Dock="Right"
+                                            Content="Reset Defaults"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Padding="10,4"
+                                            Margin="8,0,0,0"
+                                            Click="ResetShortcuts_Click" />
+                                    <TextBox x:Name="ShortcutCaptureBox"
+                                             Style="{StaticResource ModernTextBoxStyle}"
+                                             IsReadOnly="True"
+                                             Text="Select an action above, then press a new key combination here..."
+                                             PreviewKeyDown="ShortcutCaptureBox_PreviewKeyDown" />
+                                </DockPanel>
+                                <TextBlock x:Name="ShortcutStatusText"
+                                           FontSize="11.5"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Text="Shortcuts are saved automatically to Data/shortcuts.json." />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </TabItem>
+            </TabControl>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                <Button Content="Cancel"
+                        IsCancel="True"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        MinWidth="84"
+                        Margin="0,0,8,0" />
+                <Button Content="Save Changes"
+                        IsDefault="True"
+                        Style="{StaticResource AccentButtonStyle}"
+                        MinWidth="110"
+                        Click="Save_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

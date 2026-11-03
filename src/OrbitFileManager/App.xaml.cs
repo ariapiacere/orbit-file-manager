@@ -1,0 +1,78 @@
+using Microsoft.Extensions.DependencyInjection;
+using OrbitFileManager.Services;
+using OrbitFileManager.Services.FileOperations;
+using OrbitFileManager.Services.FileSystem;
+using OrbitFileManager.Services.Preview;
+using OrbitFileManager.Services.Productivity;
+using OrbitFileManager.Services.Search;
+using OrbitFileManager.Services.Settings;
+using OrbitFileManager.Services.Thumbnails;
+using OrbitFileManager.ViewModels;
+using System.Windows;
+
+namespace OrbitFileManager;
+
+public partial class App : Application
+{
+    private ServiceProvider? _serviceProvider;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        var services = new ServiceCollection();
+        ConfigureServices(services);
+        _serviceProvider = services.BuildServiceProvider();
+
+        var logger = _serviceProvider.GetRequiredService<StructuredLogger>();
+        DispatcherUnhandledException += (_, args) =>
+        {
+            logger.Error("App", "Unhandled UI exception.", args.Exception);
+            MessageBox.Show(
+                $"An unexpected error occurred:\n\n{args.Exception.Message}",
+                "Orbit File Manager",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            args.Handled = true;
+        };
+
+        var settingsService = _serviceProvider.GetRequiredService<SettingsService>();
+        settingsService.Load();
+
+        var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+        MainWindow = mainWindow;
+        mainWindow.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _serviceProvider?.Dispose();
+        base.OnExit(e);
+    }
+
+    private static void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<AppPathsService>();
+        services.AddSingleton<StructuredLogger>();
+        services.AddSingleton<SettingsService>();
+        services.AddSingleton<ShortcutService>();
+        services.AddSingleton<FavoritesService>();
+        services.AddSingleton<SessionService>();
+        services.AddSingleton<MetadataStoreService>();
+        services.AddSingleton<ShellIntegrationService>();
+        services.AddSingleton<FileBrowserService>();
+        services.AddSingleton<FileOperationService>();
+        services.AddSingleton<FileOperationQueue>();
+        services.AddSingleton<BatchRenameService>();
+        services.AddSingleton<FileSearchService>();
+        services.AddSingleton<ThumbnailService>();
+        services.AddSingleton<PreviewService>();
+        services.AddSingleton<ChecksumService>();
+        services.AddSingleton<DuplicateFinderService>();
+        services.AddSingleton<FolderSizeAnalyzerService>();
+        services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IUserDialogService, WpfUserDialogService>();
+        services.AddSingleton<MainViewModel>();
+        services.AddSingleton<MainWindow>();
+    }
+}

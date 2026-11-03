@@ -1,0 +1,65 @@
+<Window x:Class="OrbitFileManager.Views.Dialogs.AdvancedSearchDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Orbit Advanced Search"
+        Width="620"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="Segoe UI">
+
+    <Border Padding="22" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+        <StackPanel>
+            <TextBlock Text="Advanced File Search" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Text="Supports wildcards (*.png), fields (name:, ext:, regex:, size:&gt;100MB, modified:&lt;7d), and Boolean AND / OR / NOT."
+                       FontSize="11.5"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,14" />
+
+            <!-- Saved Presets -->
+            <DockPanel Margin="0,0,0,10">
+                <TextBlock Text="Saved Preset:" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Right" Content="Save Current as Preset" Style="{StaticResource SecondaryButtonStyle}" Padding="10,4" Margin="8,0,0,0" Click="SavePreset_Click" />
+                <ComboBox x:Name="PresetsCombo" DisplayMemberPath="Name" SelectionChanged="PresetsCombo_SelectionChanged" />
+            </DockPanel>
+
+            <!-- Query Box -->
+            <TextBlock Text="SEARCH QUERY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,5" />
+            <TextBox x:Name="QueryTextBox" Style="{StaticResource ModernTextBoxStyle}" FontSize="13.5" Padding="10,7" TextChanged="QueryTextBox_TextChanged" />
+
+            <!-- Quick Example Chips -->
+            <WrapPanel Margin="0,6,0,12">
+                <Button Content="*.png" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Click="Chip_Click" />
+                <Button Content="name:render AND ext:exr" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Click="Chip_Click" />
+                <Button Content="ext:png OR ext:jpg" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Click="Chip_Click" />
+                <Button Content="size:&gt;100MB" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Click="Chip_Click" />
+                <Button Content="modified:&lt;7d" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Click="Chip_Click" />
+                <Button Content="name:character NOT name:backup" Style="{StaticResource ToolbarButtonStyle}" FontSize="11" Click="Chip_Click" />
+            </WrapPanel>
+
+            <!-- Locations (; separated) -->
+            <TextBlock Text="SEARCH LOCATIONS (SEMICOLON SEPARATED FOR MULTIPLE FOLDERS)" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,5" />
+            <TextBox x:Name="LocationsTextBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,12" />
+
+            <!-- Options -->
+            <WrapPanel Margin="0,0,0,10">
+                <CheckBox x:Name="RecursiveCheck" Content="Include subfolders (recursive)" IsChecked="True" Margin="0,0,18,6" />
+                <CheckBox x:Name="CaseSensitiveCheck" Content="Case-sensitive match" Margin="0,0,18,6" />
+                <CheckBox x:Name="HiddenFilesCheck" Content="Search hidden files" Margin="0,0,0,6" />
+            </WrapPanel>
+
+            <TextBlock x:Name="ValidationText" Foreground="{DynamicResource DangerBrush}" FontSize="12" Visibility="Collapsed" Margin="0,0,0,8" TextWrapping="Wrap" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <Button Content="Cancel" IsCancel="True" Style="{StaticResource SecondaryButtonStyle}" MinWidth="88" Margin="0,0,8,0" />
+                <Button x:Name="StartSearchBtn" Content="Search in Dedicated Tab" IsDefault="True" Style="{StaticResource AccentButtonStyle}" MinWidth="170" Click="StartSearchBtn_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

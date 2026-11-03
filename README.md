@@ -1,0 +1,133 @@
+# Orbit File Manager
+
+**Orbit File Manager** is a modern, native Windows 10/11 x64 desktop File Explorer alternative built with **C#**, **WPF / XAML**, and **MVVM** (`CommunityToolkit.Mvvm`), inspired functionally by XYplorer with an original Fluent-inspired Slate Dark & Daylight Light visual design.
+
+---
+
+## 1. Architecture & Portable Layout
+
+- **UI & Presentation**: Native WPF (`PerMonitorV2` high-DPI aware, virtualized `ListView` / `GridView` / `WrapPanel` templates, runtime Dark/Light `ResourceDictionary` switching, Win32 DWM dark titlebar integration).
+- **MVVM Layer**: `MainViewModel`, `BrowserPaneViewModel`, `BrowserTabViewModel`, and `FolderTreeNodeViewModel` powered by `CommunityToolkit.Mvvm`.
+- **Services Layer**:
+  - `FileBrowserService` & `ShellIntegrationService`: Low-allocation `FileSystemEnumerable`, `FileSystemWatcher` external change tracking, `SHGetFileInfo` icons/types, `ShellExecuteEx` native Properties dialog, and Explorer `CF_HDROP` + `Preferred DropEffect` clipboard interop.
+  - `FileOperationService` & `FileOperationQueue`: Background channel worker queue with byte-level progress, transfer speed, ETA, Pause/Resume (`ManualResetEventSlim`), Cancel, conflict resolution (`Skip`, `Overwrite`, `Keep Both` + *Apply to All*), staged `.orbit_part_` copy safety, symlink/junction non-recursive deletion safeguards, and Windows Recycle Bin support.
+  - `BatchRenameService`: Two-column live preview, prefix/suffix/base override, text/Regex replace (with regex timeout protection), capitalization, sequential numbering, character removal, collision & reserved Windows device name validation, atomic two-phase execution, and verified Undo (`Ctrl+Z`).
+  - `SearchQueryParser` & `FileSearchService`: Boolean AST parser (`AND`, `OR`, `NOT`, parentheses) with streaming incremental results into dedicated search tabs, regex backtracking timeouts, and saved JSON presets.
+  - `PreviewService` & `ThumbnailService`: `IShellItemImageFactory` shell thumbnails with bounded LRU caching, zoomable/checkerboard image preview, non-locking 64 KB text/code preview, PDF header/page visual preview, Windows Property System (`IPropertyStore`) audio/video metadata, and binary PE/hex signature inspection.
+  - `ChecksumService`, `DuplicateFinderService`, `FolderSizeAnalyzerService`, `ShortcutService`: Single-pass streaming MD5/SHA-1/SHA-256/SHA-512 calculator, 3-stage byte-exact duplicate finder, junction-safe recursive disk usage analyzer, and customizable shortcuts.
+
+### Portable Directory Structure
+
+When `OrbitFileManager.exe` runs in a writable folder, all state stays self-contained alongside the executable (if launched from a read-only folder such as `Program Files`, it automatically falls back to `%LOCALAPPDATA%\OrbitFileManager`):
+
+```text
+OrbitFileManager/
+├── OrbitFileManager.exe
+├── Data/
+│   ├── settings.json         # Theme, columns, toolbar customization, window bounds
+│   ├── sessions.json         # Single/Dual-pane state, tabs, pins, locks, custom labels
+│   ├── workspaces.json       # Named multi-pane workspace presets
+│   ├── favorites.json        # User pinned favorite folders
+│   ├── item_metadata.json    # Per-file/folder color tags & custom notes
+│   ├── search_presets.json   # Saved advanced search queries
+│   └── shortcuts.json        # Customizable keyboard bindings
+├── Logs/
+│   └── orbit-YYYYMMDD.jsonl  # Structured JSON Lines diagnostic logs
+└── Cache/                    # Runtime cache directory
+```
+
+---
+
+## 2. Build, Test & Portable Publish Commands
+
+> **SDK Note**: `<OrbitTargetFramework>` is centralized in `Directory.Build.props` (currently targeting `net8.0-windows` to match the installed .NET 8.0.425 SDK; change `<OrbitTargetFramework>` to `net10.0-windows` when building with the .NET 10 SDK).
+
+Run from the repository root:
+
+```powershell
+# 1. Build the entire solution
+dotnet build OrbitFileManager.sln -c Release
+
+# 2. Run the automated xUnit tests (isolated in temporary directories)
+dotnet test OrbitFileManager.sln
+
+# 3. Launch in development mode
+dotnet run --project src/OrbitFileManager/OrbitFileManager.csproj
+
+# 4. Publish self-contained portable Windows x64 build
+dotnet publish src/OrbitFileManager/OrbitFileManager.csproj `
+  -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false `
+  -o publish/OrbitFileManager
+```
+
+---
+
+## 3. Search Query Grammar
+
+Orbit's search engine supports wildcards, field filters, size/date comparisons, regular expressions (protected by a 250 ms per-item match timeout), parentheses, and boolean operators (`AND`, `OR`, `NOT` — space between terms defaults to `AND`):
+
+| Syntax | Description | Example |
+|---|---|---|
+| `*.ext` / `*term*` | Wildcard filename match (`*` and `?`) | `*.png`, `*.blend`, `sc_*_v??.exr` |
+| `name:<pattern>` | Filename substring or wildcard match | `name:render`, `name:"final pass"` |
+| `ext:<ext>` | Exact extension match (with or without `.`) | `ext:exr`, `ext:png OR ext:jpg` |
+| `regex:<pattern>` | .NET regular expression against filename | `regex:^sc_[0-9]{2}_` |
+| `size:<op><value>` | File size (`>`, `>=`, `<`, `<=`, `=`, `min..max`; `B/KB/MB/GB/TB`) | `size:>100MB`, `size:1MB..50MB` |
+| `modified:<op><age/date>` | Relative age (`h`, `d`, `w`, `m`, `y`) or ISO date (`YYYY-MM-DD`) | `modified:<7d`, `modified:>2026-01-01` |
+| `created:<op><age/date>` | Creation timestamp filter | `created:<24h` |
+| `AND` / `OR` / `NOT` | Boolean logic & `( ... )` grouping | `name:character NOT name:backup` |
+
+---
+
+## 4. Default Keyboard Shortcuts
+
+Shortcuts marked *(Customizable)* can be rebound in **Settings → Keyboard Shortcuts** (`Data/shortcuts.json`):
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl+T` | New Tab *(Customizable)* |
+| `Ctrl+W` / Middle-Click Tab | Close Active Tab *(Customizable)* |
+| `Ctrl+Shift+T` | Reopen Closed Tab *(Customizable)* |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / Previous Tab |
+| `Alt+Left` / `Alt+Right` / `Alt+Up` | Back / Forward / Parent Folder |
+| `Ctrl+L` / `Alt+D` | Edit Address Bar |
+| `Ctrl+F` | Focus Quick Filter *(Customizable)* |
+| `Ctrl+Shift+F` | Open Advanced Search Dialog *(Customizable)* |
+| `Ctrl+Shift+D` | Toggle Dual-Pane Mode *(Customizable)* |
+| `F6` | Switch Active Pane *(Customizable)* |
+| `F2` / `Ctrl+M` | Rename Item / Batch Rename Tool *(Customizable)* |
+| `Ctrl+Z` | Undo Last Batch Rename |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste (Windows Explorer compatible) |
+| `Ctrl+Shift+C` | Copy Full Path(s) |
+| `Delete` / `Shift+Delete` | Recycle Bin / Permanent Delete |
+| `Ctrl+Shift+N` / `Ctrl+N` | New Folder / New Empty Text File |
+| `Ctrl+H` / `Ctrl+P` / `Ctrl+B` | Toggle Hidden Files / Preview Panel / Sidebar *(Customizable)* |
+| `Ctrl+Shift+U` | Duplicate File Finder *(Customizable)* |
+| `Ctrl+Shift+Z` | Folder Size Analyzer *(Customizable)* |
+| `Ctrl+Shift+K` | File Checksum Calculator *(Customizable)* |
+| `F5` / `Alt+Enter` | Refresh Workspace / Native Windows Properties |
+
+---
+
+## 5. Manual Verification Checklist
+
+Use a disposable test folder (never test destructive operations on production data):
+
+1. **Large File Copy, Pause/Resume & Conflict Resolution**:
+   - Open Dual-Pane mode (`Ctrl+Shift+D`), navigate Left and Right panes to two test folders, select a 1 GB+ file, and drag or copy (`Ctrl+C` / `Ctrl+V`) to the other pane.
+   - Verify the expandable **Operation Queue** bar shows real-time MB/s speed, byte progress, and ETA. Click **Pause**, confirm disk transfer halts, then **Resume** or **Cancel** (verifying `.orbit_part_` temporary files are cleaned up on cancel).
+   - Paste again into the same folder to trigger the **Conflict Resolution Dialog** and test **Skip**, **Keep Both**, and **Overwrite**.
+2. **Moving Across Drives & USB/Removable Storage**:
+   - Move a folder from `C:\TempTest` to a secondary/USB drive `D:\TempTest` and verify source removal occurs only after complete destination verification.
+3. **Network Shares & Disconnection Handling**:
+   - Enter a UNC path (`\\server\share`) in the Address Bar (`Ctrl+L`). Verify inaccessible or disconnected shares show a non-crashing inline error banner while keeping all tabs responsive.
+4. **Permission & Locked File Errors**:
+   - Navigate into a restricted OS folder (e.g. `C:\System Volume Information`) or attempt to rename a file held open exclusively by another process; confirm Orbit logs the warning and displays a clean error message without crashing.
+5. **External File Modifications (`FileSystemWatcher`)**:
+   - While viewing a folder in Orbit, create or rename a file in that folder using PowerShell or Notepad; confirm Orbit automatically refreshes the tab within ~400 ms while preserving selection.
+6. **Unicode & Long Paths**:
+   - Create folders and files containing Thai, Japanese, emoji, and accented characters (`โปรเจกต์_テスト_🚀.txt`) nested >260 characters deep (enabled via `longPathAware` in `app.manifest`), then preview, batch-rename, and calculate SHA-256 checksums.
+7. **High-Density Folders (10,000–100,000 Items)**:
+   - Open a large directory in **Details** view; verify UI virtualization keeps scrolling smooth, `Ctrl+F` Quick Filter narrows items instantaneously, and switching to **Thumbnails** loads previews asynchronously in the background without freezing navigation.
+8. **Drag-and-Drop**:
+   - Reorder tabs via drag-and-drop, drag folders onto the **Favorites** sidebar section to pin them, drag files between Left and Right panes (hold `Ctrl` to force Copy, `Shift` to force Move), and drag files between Orbit and Windows Explorer.

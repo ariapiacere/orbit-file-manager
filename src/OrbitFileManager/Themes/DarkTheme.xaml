@@ -1,0 +1,65 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Orbit Graphite & Signal Orange (dark). Neutrals carry a slight warm cast so the orange sits in them
+         instead of fighting a blue-grey base. Accent buttons use dark ink on orange, like safety signage. -->
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FF151413" />
+    <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#FF1B1A18" />
+    <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#FF181715" />
+    <SolidColorBrush x:Key="BrowserBackgroundBrush" Color="#FF121110" />
+    <SolidColorBrush x:Key="InspectorBackgroundBrush" Color="#FF181715" />
+    <SolidColorBrush x:Key="StatusBarBackgroundBrush" Color="#FF100F0E" />
+    <SolidColorBrush x:Key="ElevatedSurfaceBrush" Color="#FF221F1C" />
+    <SolidColorBrush x:Key="InputBackgroundBrush" Color="#FF0E0D0C" />
+
+    <SolidColorBrush x:Key="BorderSubtleBrush" Color="#FF2A2724" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#FF3B3732" />
+
+    <SolidColorBrush x:Key="HoverBackgroundBrush" Color="#FF24211E" />
+    <SolidColorBrush x:Key="ActiveTabBackgroundBrush" Color="#FF26221F" />
+    <SolidColorBrush x:Key="InactiveTabBackgroundBrush" Color="#FF181715" />
+
+    <SolidColorBrush x:Key="SelectedRowBackgroundBrush" Color="#FF35230F" />
+    <SolidColorBrush x:Key="SelectedRowBorderBrush" Color="#FFFF7A1A" />
+
+    <SolidColorBrush x:Key="AccentBrush" Color="#FFFF7A1A" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFFF9A4D" />
+    <SolidColorBrush x:Key="AccentForegroundBrush" Color="#FF1A1108" />
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#2EFF7A1A" />
+
+    <!-- Rose rather than red so destructive actions never read as the orange accent -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#FFF43F5E" />
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="#FFFB7185" />
+    <SolidColorBrush x:Key="DangerSubtleBrush" Color="#26F43F5E" />
+
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF4EFE9" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFA8A29E" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#FF78716C" />
+
+    <!-- Folder glyphs drawn as vector paths (e.g. Folder Size Analyzer rows) -->
+    <SolidColorBrush x:Key="FolderAccentBrush" Color="#FFFBBF24" />
+
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#FF3A3631" />
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#FF57514A" />
+
+    <DrawingBrush x:Key="CheckerboardBrush" TileMode="Tile" Viewport="0,0,16,16" ViewportUnits="Absolute">
+        <DrawingBrush.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF1C1A18">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,16,16" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF282522">
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <RectangleGeometry Rect="0,0,8,8" />
+                            <RectangleGeometry Rect="8,8,8,8" />
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
+
+</ResourceDictionary>

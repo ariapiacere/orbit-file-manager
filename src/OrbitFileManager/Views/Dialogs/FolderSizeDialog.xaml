@@ -1,0 +1,177 @@
+<Window x:Class="OrbitFileManager.Views.Dialogs.FolderSizeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:OrbitFileManager.Converters"
+        Title="Folder Size Analyzer"
+        Width="860"
+        Height="610"
+        MinWidth="680"
+        MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}"
+        FontFamily="Segoe UI"
+        Closing="Window_Closing">
+
+    <Window.Resources>
+        <converters:RatioToWidthConverter x:Key="RatioToWidth" />
+        <converters:BooleanToVisibilityExConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Border Padding="20" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                <TextBlock DockPanel.Dock="Right"
+                           x:Name="TotalsBadgeText"
+                           FontSize="12.5"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource AccentBrush}"
+                           VerticalAlignment="Center" />
+                <StackPanel>
+                    <TextBlock Text="Folder Size Analyzer" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Text="Double-click any subfolder to drill down • Symlinks and junctions skipped safely"
+                               FontSize="11.5"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,2,0,0" />
+                </StackPanel>
+            </DockPanel>
+
+            <!-- Target Path Bar -->
+            <DockPanel Grid.Row="1" Margin="0,0,0,12">
+                <Button DockPanel.Dock="Left"
+                        x:Name="UpParentButton"
+                        Content="↑ Parent"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="0,0,8,0"
+                        Click="UpParent_Click" />
+                <Button DockPanel.Dock="Right"
+                        x:Name="StopAnalyzeButton"
+                        Content="Stop"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Visibility="Collapsed"
+                        Margin="8,0,0,0"
+                        Click="StopAnalyze_Click" />
+                <Button DockPanel.Dock="Right"
+                        x:Name="AnalyzeButton"
+                        Content="Analyze"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Margin="8,0,0,0"
+                        Click="Analyze_Click" />
+                <TextBox x:Name="FolderPathBox"
+                         Style="{StaticResource ModernTextBoxStyle}"
+                         KeyDown="FolderPathBox_KeyDown" />
+            </DockPanel>
+
+            <!-- Visual Size Breakdown List -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource BrowserBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <ListView x:Name="BreakdownListView"
+                          Background="Transparent"
+                          BorderThickness="0"
+                          Foreground="{DynamicResource TextPrimaryBrush}"
+                          ItemContainerStyle="{StaticResource ModernFileListItemStyle}"
+                          MouseDoubleClick="BreakdownListView_MouseDoubleClick"
+                          ScrollViewer.CanContentScroll="True"
+                          VirtualizingPanel.IsVirtualizing="True">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Item Name" Width="250">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="{StaticResource IconFolder}"
+                                                  Fill="{DynamicResource FolderAccentBrush}"
+                                                  Width="14" Height="14"
+                                                  Stretch="Uniform"
+                                                  Margin="0,0,7,0"
+                                                  Visibility="{Binding IsDirectory, Converter={StaticResource BoolToVis}}" />
+                                            <Path Data="{StaticResource IconNewFile}"
+                                                  Stroke="{DynamicResource TextSecondaryBrush}"
+                                                  StrokeThickness="1.6"
+                                                  Width="14" Height="14"
+                                                  Stretch="Uniform"
+                                                  Margin="0,0,7,0"
+                                                  Visibility="{Binding IsDirectory, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+
+                            <GridViewColumn Header="Total Size" Width="105" DisplayMemberBinding="{Binding FormattedSize}" />
+
+                            <GridViewColumn Header="Usage Share" Width="230">
+                                <GridViewColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DockPanel VerticalAlignment="Center">
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding PercentageText}"
+                                                       Width="46"
+                                                       TextAlignment="Right"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                                       Margin="6,0,0,0" />
+                                            <Border x:Name="BarTrack"
+                                                    Height="8"
+                                                    CornerRadius="4"
+                                                    Background="{DynamicResource InputBackgroundBrush}"
+                                                    VerticalAlignment="Center">
+                                                <Border HorizontalAlignment="Left"
+                                                        CornerRadius="4"
+                                                        Background="{DynamicResource AccentBrush}">
+                                                    <Border.Width>
+                                                        <MultiBinding Converter="{StaticResource RatioToWidth}">
+                                                            <Binding Path="RatioOfParent" />
+                                                            <Binding ElementName="BarTrack" Path="ActualWidth" />
+                                                        </MultiBinding>
+                                                    </Border.Width>
+                                                </Border>
+                                            </Border>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </GridViewColumn.CellTemplate>
+                            </GridViewColumn>
+
+                            <GridViewColumn Header="Files" Width="85" DisplayMemberBinding="{Binding FileCount, StringFormat='{}{0:N0}'}" />
+                            <GridViewColumn Header="Subfolders" Width="90" DisplayMemberBinding="{Binding SubfolderCount, StringFormat='{}{0:N0}'}" />
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </Border>
+
+            <!-- Footer -->
+            <DockPanel Grid.Row="3" Margin="0,14,0,0">
+                <TextBlock x:Name="StatusText"
+                           DockPanel.Dock="Left"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           VerticalAlignment="Center" />
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Open Selected in New Tab"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="0,0,8,0"
+                            Click="OpenInTab_Click" />
+                    <Button Content="Close"
+                            IsCancel="True"
+                            Style="{StaticResource AccentButtonStyle}"
+                            MinWidth="88" />
+                </StackPanel>
+            </DockPanel>
+        </Grid>
+    </Border>
+</Window>
