@@ -22,6 +22,15 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# git, gh and dotnet print progress on stderr; Windows PowerShell 5.1 would treat that as a terminating error
+# under 'Stop'. Run them with 'Continue' and judge success by the exit code instead.
+function Invoke-Native([string]$What, [scriptblock]$Command) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $Command } finally { $ErrorActionPreference = $previous }
+    if ($LASTEXITCODE -ne 0) { throw "$What failed (exit code $LASTEXITCODE)." }
+}
+
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
 if (-not $dotnet) { $dotnet = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet\dotnet.exe' }
 if (-not (Test-Path $dotnet)) { throw 'dotnet SDK not found.' }
@@ -36,14 +45,12 @@ if (git status --porcelain) { throw 'Working tree has uncommitted changes. Commi
 if (git tag --list $tag) { throw "Tag $tag already exists. Bump <Version> in Directory.Build.props first." }
 
 Write-Host "Testing..." -ForegroundColor Cyan
-& $dotnet test OrbitFileManager.sln -c Release --nologo
-if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+Invoke-Native 'Tests' { & $dotnet test OrbitFileManager.sln -c Release --nologo }
 
 Write-Host "Publishing $version..." -ForegroundColor Cyan
 $publishDir = Join-Path $root 'publish\OrbitFileManager'
 if (Test-Path $publishDir) { Remove-Item -Recurse -Force $publishDir }
-& $dotnet publish src/OrbitFileManager/OrbitFileManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $publishDir --nologo
-if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
+Invoke-Native 'Publish' { & $dotnet publish src/OrbitFileManager/OrbitFileManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $publishDir --nologo }
 
 $artifacts = Join-Path $root 'publish\release'
 New-Item -ItemType Directory -Force $artifacts | Out-Null
@@ -55,14 +62,20 @@ $shaPath = "$zipPath.sha256"
 Set-Content -Path $shaPath -Value "$hash  $package" -Encoding ascii -NoNewline
 
 Write-Host "Tagging $tag and pushing..." -ForegroundColor Cyan
-git tag -a $tag -m "Orbit File Manager $version"
-git push origin HEAD
-git push origin $tag
+Invoke-Native 'git tag' { git tag -a $tag -m "Orbit File Manager $version" }
+Invoke-Native 'git push' { git push origin HEAD }
+Invoke-Native 'git push tag' { git push origin $tag }
 
 Write-Host "Creating GitHub release..." -ForegroundColor Cyan
 $ghArgs = @('release', 'create', $tag, $zipPath, $shaPath, '--title', "Orbit File Manager $version")
-if ($Notes) { $ghArgs += @('--notes', $Notes) } else { $ghArgs += '--generate-notes' }
-gh @ghArgs
-if ($LASTEXITCODE -ne 0) { throw 'gh release create failed.' }
+if ($Notes) {
+    # Pass notes through a file: inline strings with quotes break native argument passing in PowerShell 5.1.
+    $notesPath = Join-Path $artifacts 'release-notes.md'
+    Set-Content -Path $notesPath -Value $Notes -Encoding utf8
+    $ghArgs += @('--notes-file', $notesPath)
+} else {
+    $ghArgs += '--generate-notes'
+}
+Invoke-Native 'gh release create' { gh @ghArgs }
 
 Write-Host "Released $tag. Running copies of Orbit will offer it on their next start." -ForegroundColor Green
