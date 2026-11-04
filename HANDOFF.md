@@ -45,6 +45,8 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
   kept per orientation in `VerticalSplitRatio` / `HorizontalSplitRatio` and saved with the session.
 - Compare Folders is a toggle (`IsComparingPanes`): the second press clears the highlights. While it is on,
   loading a folder in either pane re-compares; leaving dual pane ends it.
+- The + (new tab) button sits right after the last tab, browser style (`Controls/TabStripPanel.cs`). When the
+  tabs overflow, the tab list scrolls (pixel scrolling, so the last tab ends flush) and + stays at the right edge.
 - Theme: "Graphite & Signal Orange". Accent `#FF7A1A` on warm graphite in dark mode, `#EA580C` on zinc greys
   in light mode. Accent buttons use dark ink (`AccentForegroundBrush` `#1A1108`). Danger is rose so it never
   reads as the accent.
