@@ -36,6 +36,12 @@ public sealed class UpdateService
     private const string LatestReleaseApiUrl = $"https://api.github.com/repos/{RepositoryOwner}/{RepositoryName}/releases/latest";
     private const string NotesUnavailable = "GitHub is limiting requests from this network right now, so the release notes could not be loaded. Use Release page to see what's new.";
 
+    /// <summary>
+    /// How long an update check may take before it is reported as failed. The HTTP clients' own timeout is sized
+    /// for downloading the package, which would leave a stalled check silent for minutes.
+    /// </summary>
+    public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
+
     /// <summary>Version of the running build (the Version in Directory.Build.props).</summary>
     public static Version CurrentVersion { get; } = Normalize(typeof(UpdateService).Assembly.GetName().Version ?? new Version(0, 0, 0));
 
@@ -67,6 +73,20 @@ public sealed class UpdateService
     /// is built from the tag and the release's fixed download URLs instead.
     /// </summary>
     public async Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(CheckTimeout);
+        try
+        {
+            return await CheckForUpdateCoreAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"GitHub did not answer within {CheckTimeout.TotalSeconds:0} seconds.");
+        }
+    }
+
+    private async Task<UpdateInfo?> CheckForUpdateCoreAsync(CancellationToken cancellationToken)
     {
         string? latestTag = await TryGetLatestTagAsync(cancellationToken);
         if (latestTag is null)

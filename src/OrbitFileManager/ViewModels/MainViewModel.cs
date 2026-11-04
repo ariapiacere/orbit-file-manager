@@ -2049,14 +2049,22 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             StatusMessage = "Update check failed.";
-            _dialogService.ShowError("Check for Updates", $"Could not reach GitHub to check for updates.\n\n{ex.Message}");
+            _dialogService.ShowError(
+                "Check for Updates",
+                $"Could not reach GitHub to check for updates.\n\n{ex.Message}\n\nNew versions can also be downloaded from {UpdateService.ReleasesPageUrl}");
             return;
         }
 
+        // A manual check always answers with a window; a status-bar line alone is easy to miss.
         if (AvailableUpdate is null)
+        {
             StatusMessage = $"{AppVersionText} is up to date.";
+            _dialogService.ShowMessage("Check for Updates", $"You have the latest version ({AppVersionText}).");
+        }
         else
+        {
             InstallUpdate();
+        }
     }
 
     [RelayCommand]

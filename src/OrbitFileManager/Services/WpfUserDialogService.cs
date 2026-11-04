@@ -65,7 +65,9 @@ public sealed class WpfUserDialogService : IUserDialogService
         return Task.FromResult(new ConflictDecision(ConflictResolution.Skip, false));
     }
 
-    public void ShowError(string title, string message)
+    public void ShowError(string title, string message) => ShowMessage(title, message);
+
+    public void ShowMessage(string title, string message)
     {
         void Show()
         {

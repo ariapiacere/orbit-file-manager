@@ -26,6 +26,9 @@ public interface IUserDialogService
 
     void ShowError(string title, string message);
 
+    /// <summary>Shows an informational message with an OK button.</summary>
+    void ShowMessage(string title, string message);
+
     bool ShowSettingsDialog(AppSettings currentSettings, ShortcutService? shortcutService, string storagePath, bool isPortable);
 
     int? ShowBatchRenameDialog(BatchRenameService renameService, IReadOnlyList<string> sourcePaths);
