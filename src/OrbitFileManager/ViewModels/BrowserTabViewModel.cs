@@ -21,9 +21,26 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
 
     private List<FileEntryItem> _allItems = [];
     private CancellationTokenSource? _loadCts;
-    private FileSystemWatcher? _watcher;
-    private CancellationTokenSource? _watcherDebounceCts;
+    private string? _loadingPath;
     private bool _disposed;
+
+    // Folder watching. Fields without a note are only touched on the UI thread.
+    private static readonly TimeSpan RefreshDebounce = TimeSpan.FromMilliseconds(350);
+    private const long RefreshMaxDelayMs = 1500;
+    private static readonly TimeSpan FileUpdateDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan NetworkCheckInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan WatcherRetryDelay = TimeSpan.FromSeconds(5);
+
+    private FileSystemWatcher? _watcher;
+    private string? _watcherPath;
+    private CancellationTokenSource? _watchCts;
+    private DateTime? _loadedFolderStamp;
+    private bool _refreshAfterLoad;
+    private readonly object _watchSync = new();
+    private CancellationTokenSource? _refreshDebounceCts;                                  // _watchSync
+    private long _refreshBurstStartedAt;                                                   // _watchSync
+    private readonly HashSet<string> _changedFiles = new(StringComparer.OrdinalIgnoreCase); // _watchSync
+    private bool _fileUpdateScheduled;                                                     // _watchSync
 
     [ObservableProperty]
     private string _title = "Folder";
@@ -222,6 +239,9 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
 
         IsLoading = true;
         ErrorMessage = null;
+        _loadingPath = normalized;
+        // This load lists the folder after every change seen so far; only changes from here on need another pass.
+        _refreshAfterLoad = false;
 
         try
         {
@@ -266,7 +286,8 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
 
             ApplyFilterAndSort(selectPathAfterLoad);
             ApplyCollectionGrouping();
-            AttachWatcher(result.NormalizedPath);
+            _loadedFolderStamp = result.FolderStampUtc;
+            EnsureWatcher(result.NormalizedPath);
 
             _settingsService.RecordRecentFolder(result.NormalizedPath);
             _onItemsLoaded?.Invoke(this);
@@ -286,7 +307,16 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         finally
         {
             if (CancellationHelper.Release(ref _loadCts, cts))
+            {
                 IsLoading = false;
+                _loadingPath = null;
+                if (_refreshAfterLoad && !_disposed)
+                {
+                    // Something changed while this load was listing the folder, so the list may already be stale.
+                    _refreshAfterLoad = false;
+                    ScheduleDebouncedRefresh();
+                }
+            }
         }
     }
 
@@ -593,85 +623,363 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             Breadcrumbs.Add(seg);
     }
 
-    private void AttachWatcher(string directoryPath)
-    {
-        DetachWatcher();
+    // ── Folder watching ──
+    // Created / deleted / renamed entries reload the list; a file that changes size (a copy finishing) is updated in place.
+    // A watcher that reports an error is replaced. Network folders are also checked every few seconds, because a share
+    // can stop sending change notices without an error, or never send them for changes made on the server itself.
 
+    /// <summary>
+    /// Watches <paramref name="directoryPath"/>. A watcher already on that folder is kept, so reloading the same folder
+    /// never leaves a moment in which changes go unseen.
+    /// </summary>
+    private void EnsureWatcher(string directoryPath)
+    {
+        if (_watcher is not null && _watcherPath is not null && PathValidator.PathsEqual(_watcherPath, directoryPath))
+            return;
+
+        DetachWatcher();
+        _watcherPath = directoryPath;
+        _watchCts = new CancellationTokenSource();
+        _watcher = TryCreateWatcher(directoryPath);
+
+        // Watcher-driven reloads run on the UI dispatcher; without one (unit tests) there is nothing to check for.
+        if (Application.Current is null)
+            return;
+
+        // The first check runs at once and catches changes made between listing the folder and the watcher starting.
+        bool keepChecking = _watcher is null || IsNetworkPath(directoryPath);
+        _ = CheckFolderStampAsync(directoryPath, keepChecking, _watchCts.Token);
+    }
+
+    private FileSystemWatcher? TryCreateWatcher(string directoryPath)
+    {
+        FileSystemWatcher? watcher = null;
         try
         {
-            var watcher = new FileSystemWatcher(directoryPath)
+            watcher = new FileSystemWatcher(directoryPath)
             {
                 IncludeSubdirectories = false,
+                // The default 8 KB overflows when many files land at once; 64 KB is the most a network share accepts.
+                InternalBufferSize = 64 * 1024,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size | NotifyFilters.LastWrite
             };
 
             watcher.Created += OnFileSystemChanged;
             watcher.Deleted += OnFileSystemChanged;
             watcher.Renamed += OnFileSystemRenamed;
+            watcher.Changed += OnFileContentChanged;
+            watcher.Error += OnWatcherError;
             watcher.EnableRaisingEvents = true;
-            _watcher = watcher;
+            return watcher;
         }
         catch
         {
+            DisposeWatcher(watcher);
+            return null;
         }
     }
 
     private void OnFileSystemRenamed(object sender, RenamedEventArgs e) => ScheduleDebouncedRefresh();
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e) => ScheduleDebouncedRefresh();
 
+    /// <summary>
+    /// Reloads the list shortly after a burst of changes. While changes keep coming (a long copy) the reload is not
+    /// postponed for more than <see cref="RefreshMaxDelayMs"/>, so files show up as they arrive.
+    /// </summary>
     private void ScheduleDebouncedRefresh()
     {
         if (_disposed || IsSearchTab)
             return;
 
         // FileSystemWatcher raises events on thread-pool threads, so several calls can race here.
-        // Capture the token synchronously; the debounce task disposes its own source when it ends.
-        var cts = CancellationHelper.Replace(ref _watcherDebounceCts);
-        CancellationToken token = cts.Token;
+        CancellationTokenSource cts;
+        lock (_watchSync)
+        {
+            long now = Environment.TickCount64;
+            if (_refreshDebounceCts is null)
+                _refreshBurstStartedAt = now;
+            else if (now - _refreshBurstStartedAt >= RefreshMaxDelayMs)
+                return; // a reload is already due; let it run instead of pushing it back again
 
-        _ = Task.Run(async () =>
+            CancellationHelper.SafeCancel(_refreshDebounceCts);
+            cts = new CancellationTokenSource();
+            _refreshDebounceCts = cts;
+        }
+
+        _ = RunDebouncedRefreshAsync(cts);
+    }
+
+    private async Task RunDebouncedRefreshAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(RefreshDebounce, cts.Token).ConfigureAwait(false);
+            lock (_watchSync)
+            {
+                if (!ReferenceEquals(_refreshDebounceCts, cts))
+                    return;
+                _refreshDebounceCts = null; // the next change starts a new burst
+            }
+
+            Application.Current?.Dispatcher.InvokeAsync(RequestRefresh);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            // Superseded sources are only cancelled by the code above, never disposed there.
+            cts.Dispose();
+        }
+    }
+
+    /// <summary>Reloads the list now, or right after the load in progress when one is running. UI thread only.</summary>
+    private void RequestRefresh()
+    {
+        if (_disposed || IsSearchTab || string.IsNullOrEmpty(CurrentPath))
+            return;
+
+        if (IsLoading)
+        {
+            // The running load may have listed the folder before this change; never drop it.
+            // Changes in the folder being left behind do not matter for a load of another folder.
+            if (_watcherPath is null || _loadingPath is null || PathValidator.PathsEqual(_watcherPath, _loadingPath))
+                _refreshAfterLoad = true;
+            return;
+        }
+
+        _ = RefreshAsync(preserveSelection: true);
+    }
+
+    private void OnFileContentChanged(object sender, FileSystemEventArgs e)
+    {
+        if (_disposed || IsSearchTab)
+            return;
+
+        lock (_watchSync)
+        {
+            _changedFiles.Add(e.FullPath);
+            if (_fileUpdateScheduled)
+                return;
+            _fileUpdateScheduled = true;
+        }
+
+        _ = UpdateChangedFilesAsync((FileSystemWatcher)sender);
+    }
+
+    /// <summary>
+    /// Refreshes size and modified time of files that changed, at most once per <see cref="FileUpdateDelay"/>,
+    /// without reloading the folder. A file that keeps growing is therefore updated about once a second.
+    /// </summary>
+    private async Task UpdateChangedFilesAsync(FileSystemWatcher source)
+    {
+        await Task.Delay(FileUpdateDelay).ConfigureAwait(false);
+
+        string[] paths;
+        lock (_watchSync)
+        {
+            paths = [.. _changedFiles];
+            _changedFiles.Clear();
+            _fileUpdateScheduled = false;
+        }
+
+        if (paths.Length == 0 || _disposed)
+            return;
+
+        var updates = new List<(string Path, long Size, DateTime Modified)>(paths.Length);
+        foreach (string path in paths)
         {
             try
             {
-                await Task.Delay(350, token);
-                if (token.IsCancellationRequested || _disposed)
-                    return;
+                var info = new FileInfo(path);
+                if (info.Exists) // folders and files deleted since are skipped
+                    updates.Add((path, info.Length, info.LastWriteTime));
+            }
+            catch
+            {
+            }
+        }
 
-                if (Application.Current?.Dispatcher is { } dispatcher)
-                {
-                    await dispatcher.InvokeAsync(async () =>
-                    {
-                        if (!_disposed && !IsLoading && !IsSearchTab)
-                            await RefreshAsync(preserveSelection: true);
-                    });
-                }
+        if (updates.Count > 0)
+            Application.Current?.Dispatcher.InvokeAsync(() => ApplyFileUpdates(updates, source));
+    }
+
+    private void ApplyFileUpdates(List<(string Path, long Size, DateTime Modified)> updates, FileSystemWatcher source)
+    {
+        if (_disposed || !ReferenceEquals(source, _watcher))
+            return; // the tab moved to another folder (or the watcher was replaced and the list reloaded)
+
+        var byPath = new Dictionary<string, FileEntryItem>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in _allItems)
+        {
+            if (!item.IsDirectory)
+                byPath.TryAdd(item.FullPath, item);
+        }
+
+        bool selectionChanged = false;
+        foreach (var (path, size, modified) in updates)
+        {
+            if (!byPath.TryGetValue(path, out var item))
+                continue; // not listed yet; the reload for its creation brings it in
+
+            item.SizeBytes = size;
+            item.FormattedSize = FileSizeFormatter.FormatBytes(size);
+            item.ModifiedTime = modified;
+            selectionChanged |= SelectedItems.Contains(item);
+        }
+
+        if (selectionChanged)
+            UpdateSelection(SelectedItems);
+    }
+
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        if (_disposed)
+            return;
+
+        // Buffer overflow or a dropped network connection: changes were lost and the watcher may report nothing more.
+        var broken = (FileSystemWatcher)sender;
+        Application.Current?.Dispatcher.InvokeAsync(() => RecoverWatcher(broken));
+    }
+
+    private void RecoverWatcher(FileSystemWatcher broken)
+    {
+        if (_disposed || !ReferenceEquals(_watcher, broken) || _watcherPath is null || _watchCts is null)
+            return;
+
+        DisposeWatcher(broken);
+        _watcher = null;
+        _ = RestartWatcherAsync(_watcherPath, _watchCts.Token);
+    }
+
+    private async Task RestartWatcherAsync(string directoryPath, CancellationToken token)
+    {
+        TimeSpan delay = TimeSpan.FromMilliseconds(500);
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(delay, token);
             }
             catch (OperationCanceledException)
             {
+                return;
             }
-            finally
+
+            // Creating a watcher touches the share, which can hang while the network is down; keep it off the UI thread.
+            FileSystemWatcher? watcher = await Task.Run(() => TryCreateWatcher(directoryPath));
+            if (token.IsCancellationRequested || _disposed)
             {
-                CancellationHelper.Release(ref _watcherDebounceCts, cts);
+                DisposeWatcher(watcher);
+                return;
             }
-        });
+
+            if (watcher is not null)
+            {
+                _watcher = watcher;
+                RequestRefresh(); // pick up whatever changed while no watcher was running
+                return;
+            }
+
+            delay = WatcherRetryDelay;
+        }
+    }
+
+    /// <summary>
+    /// Compares the folder's last-write time with the one read when the list was loaded and reloads when it moved.
+    /// Runs once, or every <see cref="NetworkCheckInterval"/> when <paramref name="keepChecking"/> is set.
+    /// </summary>
+    private async Task CheckFolderStampAsync(string directoryPath, bool keepChecking, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            DateTime? stamp = await Task.Run(() => TryGetFolderStamp(directoryPath));
+            if (token.IsCancellationRequested || _disposed)
+                return;
+
+            if (stamp is not null && !IsLoading)
+            {
+                if (_loadedFolderStamp is null)
+                    _loadedFolderStamp = stamp;
+                else if (stamp != _loadedFolderStamp)
+                    RequestRefresh();
+            }
+
+            if (!keepChecking)
+                return;
+
+            try
+            {
+                await Task.Delay(NetworkCheckInterval, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    private static DateTime? TryGetFolderStamp(string directoryPath)
+    {
+        try
+        {
+            var info = new DirectoryInfo(directoryPath);
+            return info.Exists ? info.LastWriteTimeUtc : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsNetworkPath(string path)
+    {
+        if (path.StartsWith(@"\\", StringComparison.Ordinal))
+            return true;
+
+        try
+        {
+            string? root = Path.GetPathRoot(path);
+            return !string.IsNullOrEmpty(root) && new DriveInfo(root).DriveType == DriveType.Network;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void DetachWatcher()
     {
-        CancellationHelper.CancelAndClear(ref _watcherDebounceCts);
-
-        if (_watcher is not null)
+        CancellationHelper.CancelAndClear(ref _watchCts);
+        lock (_watchSync)
         {
-            try
-            {
-                _watcher.EnableRaisingEvents = false;
-                _watcher.Created -= OnFileSystemChanged;
-                _watcher.Deleted -= OnFileSystemChanged;
-                _watcher.Renamed -= OnFileSystemRenamed;
-                _watcher.Dispose();
-            }
-            catch { }
-            _watcher = null;
+            CancellationHelper.SafeCancel(_refreshDebounceCts);
+            _refreshDebounceCts = null;
+            _changedFiles.Clear();
+        }
+
+        DisposeWatcher(_watcher);
+        _watcher = null;
+        _watcherPath = null;
+    }
+
+    private void DisposeWatcher(FileSystemWatcher? watcher)
+    {
+        if (watcher is null)
+            return;
+
+        try
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Created -= OnFileSystemChanged;
+            watcher.Deleted -= OnFileSystemChanged;
+            watcher.Renamed -= OnFileSystemRenamed;
+            watcher.Changed -= OnFileContentChanged;
+            watcher.Error -= OnWatcherError;
+            watcher.Dispose();
+        }
+        catch
+        {
         }
     }
 

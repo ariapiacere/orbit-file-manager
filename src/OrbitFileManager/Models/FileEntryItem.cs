@@ -14,12 +14,35 @@ public partial class FileEntryItem : ObservableObject
     public bool IsReadOnly { get; init; }
     public bool IsSymbolicLink { get; init; }
     public string? LinkTarget { get; init; }
-    public long? SizeBytes { get; init; }
-    public required string FormattedSize { get; init; }
     public required string TypeDescription { get; init; }
     public DateTime CreatedTime { get; init; }
-    public DateTime ModifiedTime { get; init; }
     public required string AttributesSummary { get; init; }
+
+    // Size and modified time change in place while a file is still being written (see BrowserTabViewModel's watcher).
+    private long? _sizeBytes;
+    public long? SizeBytes
+    {
+        get => _sizeBytes;
+        set => SetProperty(ref _sizeBytes, value);
+    }
+
+    private string _formattedSize = string.Empty;
+    public required string FormattedSize
+    {
+        get => _formattedSize;
+        set => SetProperty(ref _formattedSize, value);
+    }
+
+    private DateTime _modifiedTime;
+    public DateTime ModifiedTime
+    {
+        get => _modifiedTime;
+        set
+        {
+            if (SetProperty(ref _modifiedTime, value))
+                OnPropertyChanged(nameof(ModifiedText));
+        }
+    }
 
     [ObservableProperty]
     private ImageSource? _icon;

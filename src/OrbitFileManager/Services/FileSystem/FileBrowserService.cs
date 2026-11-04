@@ -5,11 +5,16 @@ using System.IO;
 
 namespace OrbitFileManager.Services.FileSystem;
 
+/// <param name="FolderStampUtc">
+/// The folder's own last-write time, read just before its entries were listed. It changes whenever an entry is
+/// added, removed or renamed, so comparing it later tells whether the listing is out of date.
+/// </param>
 public sealed record DirectoryLoadResult(
     bool Success,
     string NormalizedPath,
     IReadOnlyList<FileEntryItem> Items,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    DateTime? FolderStampUtc = null);
 
 public sealed class FileBrowserService
 {
@@ -88,12 +93,15 @@ public sealed class FileBrowserService
             if (string.IsNullOrWhiteSpace(normalized))
                 return new DirectoryLoadResult(false, string.Empty, [], "Folder path cannot be empty.");
 
-            if (!Directory.Exists(normalized))
+            var dirInfo = new DirectoryInfo(normalized);
+            if (!dirInfo.Exists)
                 return new DirectoryLoadResult(false, normalized, [], $"The folder '{normalized}' does not exist or is disconnected.");
+
+            DateTime stampRead = SafeReadDate(() => dirInfo.LastWriteTimeUtc);
+            DateTime? folderStamp = stampRead == DateTime.MinValue ? null : stampRead;
 
             try
             {
-                var dirInfo = new DirectoryInfo(normalized);
                 var options = new EnumerationOptions
                 {
                     IgnoreInaccessible = true,
@@ -153,7 +161,7 @@ public sealed class FileBrowserService
                     });
                 }
 
-                return new DirectoryLoadResult(true, normalized, entries, null);
+                return new DirectoryLoadResult(true, normalized, entries, null, folderStamp);
             }
             catch (OperationCanceledException)
             {

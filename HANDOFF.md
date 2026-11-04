@@ -47,6 +47,26 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
   loading a folder in either pane re-compares; leaving dual pane ends it.
 - The + (new tab) button sits right after the last tab, browser style (`Controls/TabStripPanel.cs`). When the
   tabs overflow, the tab list scrolls (pixel scrolling, so the last tab ends flush) and + stays at the right edge.
+- Tools > Check for Updates always answers with a window: the update offer, "You have the latest version", or an
+  error. The check itself gives up after `UpdateService.CheckTimeout` (30 s); the HTTP clients keep their
+  10-minute timeout for the package download.
+- Auto-refresh (folder watcher in `BrowserTabViewModel`, "Folder watching" section):
+  - A change that arrives while the list is loading queues one more reload (`_refreshAfterLoad`) instead of being
+    dropped. Reloading the same folder keeps its watcher (`EnsureWatcher`), so there is no unwatched gap.
+  - During a long copy the reload debounce (350 ms) is never pushed back more than `RefreshMaxDelayMs` (1.5 s),
+    so files show up as they land.
+  - `Changed` events update size and modified time in place, about once a second, without a reload.
+    `FileEntryItem.SizeBytes` / `FormattedSize` / `ModifiedTime` are now settable and raise change notices.
+  - A watcher `Error` (buffer overflow, dropped share) replaces the watcher off the UI thread, retrying every 5 s,
+    then reloads. The buffer is 64 KB, the most a network share accepts.
+  - `DirectoryLoadResult.FolderStampUtc` is the folder's last-write time read before listing. Right after a new
+    watcher starts it is compared once. On network paths (UNC or mapped) it is compared every 5 s, because a
+    share can stop sending change notices without an error, or never send them for changes made on the server.
+  - The UI harness `autorefresh` mode covers all of this, including a loopback `\\localhost\C$` share. 18 checks;
+    the old code fails 7.
+  - Known slow spot, not fixed: a load adds rows to `DisplayedItems` one at a time on the UI thread. On the dev
+    PC a local folder of 4,000 .txt files reloads in about 4 s and one of 15,000 in about 22 s, and the window is
+    unresponsive meanwhile.
 - Theme: "Graphite & Signal Orange". Accent `#FF7A1A` on warm graphite in dark mode, `#EA580C` on zinc greys
   in light mode. Accent buttons use dark ink (`AccentForegroundBrush` `#1A1108`). Danger is rose so it never
   reads as the accent.
