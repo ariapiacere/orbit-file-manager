@@ -260,11 +260,12 @@
                                       ToolTip="Synchronize Folder Navigation Between Panes">
                             <Path Data="{StaticResource IconSync}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" Width="14" Height="14" Stretch="Uniform" />
                         </ToggleButton>
-                        <Button Style="{StaticResource ToolbarButtonStyle}"
-                                Command="{Binding ComparePanesCommand}"
-                                ToolTip="Compare Folder Contents Between Panes">
+                        <ToggleButton Style="{StaticResource ToolbarToggleButtonStyle}"
+                                      IsChecked="{Binding IsComparingPanes, Mode=OneWay}"
+                                      Command="{Binding ComparePanesCommand}"
+                                      ToolTip="Compare Folder Contents Between Panes (click again to turn off)">
                             <Path Data="{StaticResource IconCompare}" Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.7" Width="14" Height="14" Stretch="Uniform" />
-                        </Button>
+                        </ToggleButton>
                     </StackPanel>
 
                     <Border Width="1" Height="18" Background="{DynamicResource BorderSubtleBrush}" Margin="5,0" Visibility="{Binding ShowToolbarToolsMenu, Converter={StaticResource BoolToVis}}" />
@@ -290,7 +291,7 @@
                                 <MenuItem Header="Batch Rename Selected..." InputGestureText="Ctrl+M" Command="{Binding OpenBatchRenameCommand}" />
                                 <MenuItem Header="Advanced Search..." InputGestureText="Ctrl+Shift+F" Command="{Binding OpenAdvancedSearchCommand}" />
                                 <Separator />
-                                <MenuItem Header="Compare Dual Panes" Command="{Binding ComparePanesCommand}" IsEnabled="{Binding IsDualPane}" />
+                                <MenuItem Header="Compare Dual Panes" Command="{Binding ComparePanesCommand}" IsChecked="{Binding IsComparingPanes, Mode=OneWay}" IsEnabled="{Binding IsDualPane}" />
                                 <MenuItem Header="Save Current Workspace..." Command="{Binding SaveCurrentWorkspaceCommand}" />
                                 <Separator />
                                 <MenuItem Header="Check for Updates..." Command="{Binding CheckForUpdatesCommand}" />
@@ -606,21 +607,17 @@
                 <GridSplitter x:Name="VerticalPaneSplitter"
                               Grid.Row="0"
                               Grid.Column="1"
-                              Width="5"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              Background="{DynamicResource BorderStrongBrush}"
-                              ShowsPreview="False"
+                              Style="{StaticResource VerticalPaneSplitterStyle}"
+                              DragCompleted="PaneSplitter_DragCompleted"
+                              MouseDoubleClick="PaneSplitter_MouseDoubleClick"
                               Visibility="Collapsed" />
 
                 <GridSplitter x:Name="HorizontalPaneSplitter"
                               Grid.Row="1"
                               Grid.Column="0"
-                              Height="5"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              Background="{DynamicResource BorderStrongBrush}"
-                              ShowsPreview="False"
+                              Style="{StaticResource HorizontalPaneSplitterStyle}"
+                              DragCompleted="PaneSplitter_DragCompleted"
+                              MouseDoubleClick="PaneSplitter_MouseDoubleClick"
                               Visibility="Collapsed" />
 
                 <controls:BrowserPaneControl x:Name="RightPaneControl"

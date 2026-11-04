@@ -87,6 +87,8 @@ public sealed class Phase2NavigationAndSessionTests : IDisposable
         {
             IsDualPane = true,
             SplitOrientation = SplitOrientationMode.Horizontal,
+            VerticalSplitRatio = 0.3,
+            HorizontalSplitRatio = 0.65,
             ActivePaneId = "Right",
             IsSyncNavigationEnabled = true,
             LeftPane = new PaneSessionState
@@ -106,6 +108,8 @@ public sealed class Phase2NavigationAndSessionTests : IDisposable
         Assert.NotNull(loaded);
         Assert.True(loaded!.IsDualPane);
         Assert.Equal(SplitOrientationMode.Horizontal, loaded.SplitOrientation);
+        Assert.Equal(0.3, loaded.VerticalSplitRatio);
+        Assert.Equal(0.65, loaded.HorizontalSplitRatio);
         Assert.Equal("Renders", loaded.LeftPane.Tabs[0].CustomLabel);
         Assert.True(loaded.RightPane.Tabs[0].IsLocked);
 

@@ -40,6 +40,11 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
   `TrackMarquee` / `FinishMarquee`). Starts on empty space in every view, and in Details on any column except
   Name (the `NameCell` DockPanel still starts a file drag). Ctrl toggles, Shift adds, dragging past the edge
   auto-scrolls. Tile views compare item bounds; Details is virtualized and selects a row-index range.
+- Dual-pane splitter: 8 px bar with a hairline and grip (`VerticalPaneSplitterStyle` /
+  `HorizontalPaneSplitterStyle`) that turns orange on hover and drag; double-click splits evenly. The position is
+  kept per orientation in `VerticalSplitRatio` / `HorizontalSplitRatio` and saved with the session.
+- Compare Folders is a toggle (`IsComparingPanes`): the second press clears the highlights. While it is on,
+  loading a folder in either pane re-compares; leaving dual pane ends it.
 - Theme: "Graphite & Signal Orange". Accent `#FF7A1A` on warm graphite in dark mode, `#EA580C` on zinc greys
   in light mode. Accent buttons use dark ink (`AccentForegroundBrush` `#1A1108`). Danger is rose so it never
   reads as the accent.

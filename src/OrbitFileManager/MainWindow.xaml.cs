@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<TextBlock, double> _toolbarLabelWidths = [];
     private double _savedSidebarWidth = 260;
     private double _savedPreviewWidth = 310;
+    private const double PaneSplitterThickness = 8;
 
     public MainWindow(MainViewModel viewModel, SettingsService settingsService, ShortcutService shortcutService)
     {
@@ -166,6 +167,11 @@ public partial class MainWindow : Window
                 ScheduleToolbarLabelFit();
                 break;
 
+            case nameof(MainViewModel.VerticalSplitRatio):
+            case nameof(MainViewModel.HorizontalSplitRatio):
+                SyncDualPaneLayout();
+                break;
+
             case nameof(MainViewModel.ShowToolbarTextLabels):
             case nameof(MainViewModel.ShowToolbarBatchRename):
             case nameof(MainViewModel.ShowToolbarSearch):
@@ -240,10 +246,11 @@ public partial class MainWindow : Window
             BottomPaneRow.MinHeight = 0;
             BottomPaneRow.Height = new GridLength(0);
 
-            LeftPaneCol.Width = new GridLength(1, GridUnitType.Star);
-            VerticalPaneSplitterCol.Width = new GridLength(5);
+            double share = _viewModel.VerticalSplitRatio;
+            LeftPaneCol.Width = new GridLength(share, GridUnitType.Star);
+            VerticalPaneSplitterCol.Width = new GridLength(PaneSplitterThickness);
             RightPaneCol.MinWidth = 220;
-            RightPaneCol.Width = new GridLength(1, GridUnitType.Star);
+            RightPaneCol.Width = new GridLength(1 - share, GridUnitType.Star);
 
             Grid.SetRow(RightPaneControl, 0);
             Grid.SetColumn(RightPaneControl, 2);
@@ -259,10 +266,11 @@ public partial class MainWindow : Window
             RightPaneCol.MinWidth = 0;
             RightPaneCol.Width = new GridLength(0);
 
-            TopPaneRow.Height = new GridLength(1, GridUnitType.Star);
-            HorizontalPaneSplitterRow.Height = new GridLength(5);
+            double share = _viewModel.HorizontalSplitRatio;
+            TopPaneRow.Height = new GridLength(share, GridUnitType.Star);
+            HorizontalPaneSplitterRow.Height = new GridLength(PaneSplitterThickness);
             BottomPaneRow.MinHeight = 160;
-            BottomPaneRow.Height = new GridLength(1, GridUnitType.Star);
+            BottomPaneRow.Height = new GridLength(1 - share, GridUnitType.Star);
 
             Grid.SetRow(RightPaneControl, 2);
             Grid.SetColumn(RightPaneControl, 0);
@@ -270,6 +278,38 @@ public partial class MainWindow : Window
             VerticalPaneSplitter.Visibility = Visibility.Collapsed;
             HorizontalPaneSplitter.Visibility = Visibility.Visible;
         }
+    }
+
+    /// <summary>Remembers where the user left the pane splitter (saved with the session).</summary>
+    private void PaneSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        // The splitter has only changed the definitions so far; measure them before reading sizes.
+        PanesHostGrid.UpdateLayout();
+
+        if (ReferenceEquals(sender, VerticalPaneSplitter))
+        {
+            double total = LeftPaneCol.ActualWidth + RightPaneCol.ActualWidth;
+            if (total > 0)
+                _viewModel.VerticalSplitRatio = LeftPaneCol.ActualWidth / total;
+        }
+        else
+        {
+            double total = TopPaneRow.ActualHeight + BottomPaneRow.ActualHeight;
+            if (total > 0)
+                _viewModel.HorizontalSplitRatio = TopPaneRow.ActualHeight / total;
+        }
+    }
+
+    private void PaneSplitter_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (ReferenceEquals(sender, VerticalPaneSplitter))
+            _viewModel.VerticalSplitRatio = 0.5;
+        else
+            _viewModel.HorizontalSplitRatio = 0.5;
+
+        // The ratio may already be 0.5 while the panes are clamped by their minimum sizes.
+        SyncDualPaneLayout();
+        e.Handled = true;
     }
 
     private void FavoritesSection_DragOver(object sender, DragEventArgs e)

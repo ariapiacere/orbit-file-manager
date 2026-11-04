@@ -70,8 +70,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private SplitOrientationMode _splitOrientation = SplitOrientationMode.Vertical;
 
+    /// <summary>Share of the dual-pane area given to the left pane in a side-by-side split.</summary>
+    [ObservableProperty]
+    private double _verticalSplitRatio = 0.5;
+
+    /// <summary>Share of the dual-pane area given to the top pane in a top-and-bottom split.</summary>
+    [ObservableProperty]
+    private double _horizontalSplitRatio = 0.5;
+
     [ObservableProperty]
     private bool _isSyncNavigationEnabled;
+
+    /// <summary>Compare mode keeps differences highlighted, re-checking whenever either pane loads a folder.</summary>
+    [ObservableProperty]
+    private bool _isComparingPanes;
 
     [ObservableProperty]
     private FilePreviewData _currentPreview = new() { Kind = PreviewKind.None };
@@ -327,12 +339,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private void OnPanePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is BrowserPaneViewModel pane &&
-            ReferenceEquals(pane, ActivePane) &&
-            e.PropertyName == nameof(BrowserPaneViewModel.ActiveTab))
-        {
+        if (sender is not BrowserPaneViewModel pane || e.PropertyName != nameof(BrowserPaneViewModel.ActiveTab))
+            return;
+
+        if (ReferenceEquals(pane, ActivePane))
             RebindSubscribedActiveTab();
-        }
+
+        if (IsComparingPanes)
+            HighlightPaneDifferences();
     }
 
     private void RebindSubscribedActiveTab()
@@ -394,6 +408,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _metadataService.DecorateItems(tab.GetAllLoadedItems());
         tab.MarkCutItems(_activeCutPaths);
         TabThumbnailsLoader?.Invoke(tab);
+
+        if (IsComparingPanes && (ReferenceEquals(tab, LeftPane.ActiveTab) || ReferenceEquals(tab, RightPane.ActiveTab)))
+            HighlightPaneDifferences();
     }
 
     private void OnPaneDirectoryNavigated(
@@ -527,6 +544,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         StatusMessage = IsDualPane ? "Dual-Pane mode enabled (F6 to switch panes)." : "Single-Pane mode.";
     }
 
+    partial void OnIsDualPaneChanged(bool value)
+    {
+        if (!value && IsComparingPanes)
+            StopComparingPanes();
+    }
+
     [RelayCommand]
     public void ToggleSplitOrientation()
     {
@@ -586,20 +609,55 @@ public partial class MainViewModel : ObservableObject, IDisposable
             : "Synchronized Dual-Pane navigation disabled.";
     }
 
+    /// <summary>Toggles compare mode: the first press highlights differences, the next one clears them.</summary>
     [RelayCommand]
     public void ComparePanes()
     {
+        if (IsComparingPanes)
+        {
+            StopComparingPanes();
+            StatusMessage = "Folder comparison turned off.";
+            return;
+        }
+
         if (!IsDualPane || LeftPane.ActiveTab is null || RightPane.ActiveTab is null)
         {
             StatusMessage = "Enable Dual-Pane mode to compare two folders.";
             return;
         }
 
-        var leftItems = LeftPane.ActiveTab.GetAllLoadedItems();
-        var rightItems = RightPane.ActiveTab.GetAllLoadedItems();
+        IsComparingPanes = true;
+        int diffCount = HighlightPaneDifferences();
+        StatusMessage = diffCount == 0
+            ? "Folders match — no unique or modified differences detected."
+            : $"Folder comparison highlighted {diffCount:N0} difference(s).";
+    }
 
-        var leftMap = leftItems.ToDictionary(i => i.Name, StringComparer.OrdinalIgnoreCase);
-        var rightMap = rightItems.ToDictionary(i => i.Name, StringComparer.OrdinalIgnoreCase);
+    private void StopComparingPanes()
+    {
+        IsComparingPanes = false;
+        foreach (var tab in LeftPane.Tabs.Concat(RightPane.Tabs))
+            tab.ClearComparisonHighlights();
+    }
+
+    private int HighlightPaneDifferences()
+    {
+        if (LeftPane.ActiveTab is not { } leftTab || RightPane.ActiveTab is not { } rightTab)
+            return 0;
+
+        // Tabs that are no longer side by side drop their old highlights.
+        foreach (var tab in LeftPane.Tabs.Concat(RightPane.Tabs))
+        {
+            if (!ReferenceEquals(tab, leftTab) && !ReferenceEquals(tab, rightTab))
+                tab.ClearComparisonHighlights();
+        }
+
+        var leftItems = leftTab.GetAllLoadedItems();
+        var rightItems = rightTab.GetAllLoadedItems();
+
+        // Search tabs can list the same name from different folders; compare against the first one.
+        var leftMap = leftItems.GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var rightMap = rightItems.GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         int diffCount = 0;
 
@@ -655,9 +713,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        StatusMessage = diffCount == 0
-            ? "Folders match — no unique or modified differences detected."
-            : $"Folder comparison highlighted {diffCount:N0} difference(s).";
+        return diffCount;
     }
 
     [RelayCommand]
@@ -1789,6 +1845,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             IsDualPane = IsDualPane,
             SplitOrientation = SplitOrientation,
+            VerticalSplitRatio = VerticalSplitRatio,
+            HorizontalSplitRatio = HorizontalSplitRatio,
             ActivePaneId = ActivePane.PaneId,
             IsSyncNavigationEnabled = IsSyncNavigationEnabled,
             LeftPane = LeftPane.ToSessionState(),
@@ -1801,6 +1859,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         string fallback = _settingsService.Current.DefaultStartPath;
         IsDualPane = session.IsDualPane;
         SplitOrientation = session.SplitOrientation;
+        VerticalSplitRatio = AppSessionState.ClampSplitRatio(session.VerticalSplitRatio);
+        HorizontalSplitRatio = AppSessionState.ClampSplitRatio(session.HorizontalSplitRatio);
         IsSyncNavigationEnabled = session.IsSyncNavigationEnabled;
 
         await LeftPane.RestoreSessionAsync(session.LeftPane, fallback);

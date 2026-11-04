@@ -851,4 +851,73 @@
         </Setter>
     </Style>
 
+    <!-- Dual-pane splitters: the whole bar is the drag area; the hairline and grip turn orange on hover/drag. -->
+    <Style x:Key="VerticalPaneSplitterStyle" TargetType="{x:Type GridSplitter}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="ResizeDirection" Value="Columns" />
+        <Setter Property="ShowsPreview" Value="False" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Cursor" Value="SizeWE" />
+        <Setter Property="ToolTip" Value="Drag to resize panes • Double-click to split evenly" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GridSplitter}">
+                    <Grid Background="{TemplateBinding Background}">
+                        <Rectangle x:Name="Line" Width="1" HorizontalAlignment="Center" Fill="{DynamicResource BorderStrongBrush}" />
+                        <Rectangle x:Name="Grip" Width="4" Height="36" RadiusX="2" RadiusY="2"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Fill="{DynamicResource BorderStrongBrush}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Line" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Grip" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Line" Property="Width" Value="2" />
+                            <Setter TargetName="Line" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Grip" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="HorizontalPaneSplitterStyle" TargetType="{x:Type GridSplitter}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="ResizeDirection" Value="Rows" />
+        <Setter Property="ShowsPreview" Value="False" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Cursor" Value="SizeNS" />
+        <Setter Property="ToolTip" Value="Drag to resize panes • Double-click to split evenly" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type GridSplitter}">
+                    <Grid Background="{TemplateBinding Background}">
+                        <Rectangle x:Name="Line" Height="1" VerticalAlignment="Center" Fill="{DynamicResource BorderStrongBrush}" />
+                        <Rectangle x:Name="Grip" Width="36" Height="4" RadiusX="2" RadiusY="2"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Fill="{DynamicResource BorderStrongBrush}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Line" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Grip" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Line" Property="Height" Value="2" />
+                            <Setter TargetName="Line" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                            <Setter TargetName="Grip" Property="Fill" Value="{DynamicResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>
