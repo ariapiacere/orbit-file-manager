@@ -578,17 +578,7 @@ public sealed class FileOperationService
 
         if (isMove && sameVolume)
         {
-            if (overwrite && Directory.Exists(destinationFile))
-                throw new IOException("Cannot overwrite a directory with a file.");
-
-            if (overwrite && File.Exists(destinationFile))
-            {
-                FileAttributes attrs = File.GetAttributes(destinationFile);
-                if ((attrs & FileAttributes.ReadOnly) != 0)
-                    File.SetAttributes(destinationFile, attrs & ~FileAttributes.ReadOnly);
-            }
-
-            File.Move(sourceFile, destinationFile, overwrite: overwrite);
+            FileTransferCommit.MoveFile(sourceFile, destinationFile, overwrite, cancellationToken);
             return;
         }
 
@@ -617,14 +607,7 @@ public sealed class FileOperationService
             var sourceInfo = new FileInfo(sourceFile);
             File.SetLastWriteTimeUtc(tempFile, sourceInfo.LastWriteTimeUtc);
 
-            if (overwrite && File.Exists(destinationFile))
-            {
-                FileAttributes destAttrs = File.GetAttributes(destinationFile);
-                if ((destAttrs & FileAttributes.ReadOnly) != 0)
-                    File.SetAttributes(destinationFile, destAttrs & ~FileAttributes.ReadOnly);
-            }
-
-            File.Move(tempFile, destinationFile, overwrite: overwrite);
+            FileTransferCommit.MoveFile(tempFile, destinationFile, overwrite, cancellationToken);
 
             if (isMove)
             {

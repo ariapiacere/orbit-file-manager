@@ -12,7 +12,15 @@
   replacements with identical metadata; a generation prevents in-flight loads from restoring an obsolete entry.
   Shell thumbnail and media property COM wrappers are released immediately so preview work does not retain them
   until GC. A real MP4 preview was checked for immediate exclusive file access.
-- Validation: Release build and 75 xUnit cases pass; a separate WPF harness verifies text input in all five views.
+- Follow-up: user confirmed the destination MP4 plays the old content after local-to-NAS copy with Apply to all.
+  Reproduced this partial-success pattern by holding the destination MP4 open without delete sharing: the folder
+  copies but the final staged rename fails. `FileTransferCommit` now retries replacement access/sharing failures
+  for up to 3 seconds, supports cancellation/pause, and retains the old destination on failure. Both transfer paths
+  use it. Queue rows show the failing file and error details, rather than only an error count.
+- Validation: Release build and 81 xUnit cases pass, including transient locks, persistent locks, and cancellation.
+  A separate WPF harness verifies text input in all five views. A real-MP4 harness verifies local-to-local and
+  local-to-loopback-SMB/UNC copy, through both transfer paths, with preview, a temporary reader, Apply to all, and
+  SHA-256 checks. The user's specific NAS destination was not available for verification.
 
 ## 0. Claude pass — 2026-11-03 (Section 2 bug is FIXED)
 

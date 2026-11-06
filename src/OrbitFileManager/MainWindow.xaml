@@ -932,6 +932,12 @@
                                                 <TextBlock Text="{Binding SummaryText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
                                                 <TextBlock DockPanel.Dock="Right" Text="{Binding EtaText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Right" />
                                             </DockPanel>
+                                            <TextBlock Text="{Binding ErrorDetails}"
+                                                       Visibility="{Binding ErrorDetails, Converter={StaticResource NullToVis}}"
+                                                       TextWrapping="Wrap"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                                       Margin="0,5,0,0" />
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

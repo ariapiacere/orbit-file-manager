@@ -63,6 +63,7 @@ public partial class FileOperationJob : ObservableObject
     private string _summaryText = "Queued";
 
     public List<string> Errors { get; } = [];
+    public string ErrorDetails => string.Join(Environment.NewLine, Errors);
 
     public CancellationToken CancellationToken => _cts.Token;
     public bool IsActive => Status is JobStatus.Queued or JobStatus.Running or JobStatus.Paused;
@@ -74,6 +75,7 @@ public partial class FileOperationJob : ObservableObject
         OnPropertyChanged(nameof(IsActive));
         OnPropertyChanged(nameof(CanPauseResume));
         OnPropertyChanged(nameof(PauseResumeLabel));
+        OnPropertyChanged(nameof(ErrorDetails));
     }
 
     public void WaitIfPaused()
@@ -452,14 +454,7 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
 
         if (isMove && sameVolume)
         {
-            if (overwrite && File.Exists(destFile))
-            {
-                FileAttributes attrs = File.GetAttributes(destFile);
-                if ((attrs & FileAttributes.ReadOnly) != 0)
-                    File.SetAttributes(destFile, attrs & ~FileAttributes.ReadOnly);
-            }
-
-            File.Move(sourceFile, destFile, overwrite: overwrite);
+            FileTransferCommit.MoveFile(sourceFile, destFile, overwrite, job.CancellationToken, job.WaitIfPaused);
             onBytesCopied(fileLen);
             return;
         }
@@ -486,14 +481,7 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
 
             File.SetLastWriteTimeUtc(tempFile, srcInfo.LastWriteTimeUtc);
 
-            if (overwrite && File.Exists(destFile))
-            {
-                FileAttributes attrs = File.GetAttributes(destFile);
-                if ((attrs & FileAttributes.ReadOnly) != 0)
-                    File.SetAttributes(destFile, attrs & ~FileAttributes.ReadOnly);
-            }
-
-            File.Move(tempFile, destFile, overwrite: overwrite);
+            FileTransferCommit.MoveFile(tempFile, destFile, overwrite, job.CancellationToken, job.WaitIfPaused);
 
             if (isMove)
                 File.Delete(sourceFile);

@@ -118,6 +118,7 @@ Use a disposable test folder (never test destructive operations on production da
    - Open Dual-Pane mode (`Ctrl+Shift+D`), navigate Left and Right panes to two test folders, select a 1 GB+ file, and drag or copy (`Ctrl+C` / `Ctrl+V`) to the other pane.
    - Verify the expandable **Operation Queue** bar shows real-time MB/s speed, byte progress, and ETA. Click **Pause**, confirm disk transfer halts, then **Resume** or **Cancel** (verifying `.orbit_part_` temporary files are cleaned up on cancel).
    - Paste again into the same folder to trigger the **Conflict Resolution Dialog** and test **Skip**, **Keep Both**, and **Overwrite**.
+   - For local-to-NAS replacement, select a folder plus sibling MP4s and choose **Overwrite** with **Apply to all**. Verify the destination videos play the new content. Temporary replacement locks retry for up to 3 seconds; persistent locks show the affected path and error in the queue while preserving the old file.
 2. **Moving Across Drives & USB/Removable Storage**:
    - Move a folder from `C:\TempTest` to a secondary/USB drive `D:\TempTest` and verify source removal occurs only after complete destination verification.
 3. **Network Shares & Disconnection Handling**:

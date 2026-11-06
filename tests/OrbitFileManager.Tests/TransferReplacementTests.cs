@@ -83,6 +83,139 @@ public sealed class TransferReplacementTests : IDisposable
         Assert.Empty(Directory.GetFiles(dst, "*.orbit_part_*", SearchOption.AllDirectories));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CopyReplace_RetriesVideoTemporarilyLockedByReader(bool queued)
+    {
+        string src = Path.Combine(_root, "src");
+        string dst = Path.Combine(_root, "dst");
+        string folder = Path.Combine(src, "scene");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(dst);
+        File.WriteAllText(Path.Combine(folder, "data.txt"), "new folder contents");
+        string video = Path.Combine(src, "scene.mp4");
+        string target = Path.Combine(dst, "scene.mp4");
+        File.WriteAllText(video, "new video contents");
+        File.WriteAllText(target, "old video contents");
+        var logger = new StructuredLogger(new AppPathsService(Path.Combine(_root, "app")));
+
+        // Shell thumbnail/property readers can allow reads while temporarily denying replacement.
+        var reader = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
+        Task releaseReader = Task.Run(async () => { await Task.Delay(400); reader.Dispose(); });
+        try
+        {
+            Task<ConflictDecision> Resolve(FileConflictContext _) =>
+                Task.FromResult(new ConflictDecision(ConflictResolution.Overwrite, true));
+            if (queued)
+            {
+                using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
+                var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+                var job = queue.EnqueueTransfer([folder, video], dst, isMove: false);
+                await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                Assert.Empty(job.Errors);
+                Assert.Equal(JobStatus.Completed, job.Status);
+                Assert.Equal(2, job.ProcessedFiles);
+            }
+            else
+            {
+                var result = await new FileOperationService(logger).TransferItemsAsync([folder, video], dst, false, Resolve);
+                Assert.Empty(result.Errors);
+                Assert.Equal(2, result.SucceededCount);
+            }
+            Assert.Equal("new folder contents", File.ReadAllText(Path.Combine(dst, "scene", "data.txt")));
+            Assert.Equal("new video contents", File.ReadAllText(target));
+            Assert.Empty(Directory.GetFiles(dst, "*.orbit_part_*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            await releaseReader;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CopyReplace_PreservesOldVideoAndReportsPersistentLock(bool queued)
+    {
+        string src = Path.Combine(_root, "src");
+        string dst = Path.Combine(_root, "dst");
+        Directory.CreateDirectory(src);
+        Directory.CreateDirectory(dst);
+        string source = Path.Combine(src, "scene.mp4");
+        string target = Path.Combine(dst, "scene.mp4");
+        File.WriteAllText(source, "new video");
+        File.WriteAllText(target, "old video");
+        using var reader = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var logger = new StructuredLogger(new AppPathsService(Path.Combine(_root, "app")));
+        Task<ConflictDecision> Resolve(FileConflictContext _) =>
+            Task.FromResult(new ConflictDecision(ConflictResolution.Overwrite, true));
+        if (queued)
+        {
+            using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+            var job = queue.EnqueueTransfer([source], dst, isMove: false);
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(JobStatus.CompletedWithErrors, job.Status);
+            Assert.Equal(0, job.ProcessedFiles);
+            Assert.Contains(target, job.ErrorDetails);
+            Assert.Contains("existing destination file was kept", job.ErrorDetails);
+        }
+        else
+        {
+            var result = await new FileOperationService(logger).TransferItemsAsync([source], dst, false, Resolve);
+            Assert.Equal(0, result.SucceededCount);
+            Assert.Contains(target, Assert.Single(result.Errors));
+        }
+        Assert.Equal("old video", File.ReadAllText(target));
+        Assert.Equal("new video", File.ReadAllText(source));
+        Assert.Empty(Directory.GetFiles(dst, "*.orbit_part_*"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CopyReplace_CanCancelWhileWaitingForVideoReader(bool queued)
+    {
+        string src = Path.Combine(_root, "src");
+        string dst = Path.Combine(_root, "dst");
+        Directory.CreateDirectory(src);
+        Directory.CreateDirectory(dst);
+        string source = Path.Combine(src, "scene.mp4");
+        string target = Path.Combine(dst, "scene.mp4");
+        File.WriteAllText(source, "new video");
+        File.WriteAllText(target, "old video");
+        using var reader = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var logger = new StructuredLogger(new AppPathsService(Path.Combine(_root, "app")));
+        Task<ConflictDecision> Resolve(FileConflictContext _) =>
+            Task.FromResult(new ConflictDecision(ConflictResolution.Overwrite, true));
+        if (queued)
+        {
+            using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+            var job = queue.EnqueueTransfer([source], dst, isMove: false);
+            await Task.Delay(300);
+            job.Cancel();
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(JobStatus.Cancelled, job.Status);
+            Assert.Equal(0, job.ProcessedFiles);
+        }
+        else
+        {
+            using var cts = new CancellationTokenSource(300);
+            var result = await new FileOperationService(logger).TransferItemsAsync([source], dst, false, Resolve,
+                cancellationToken: cts.Token);
+            Assert.True(result.IsCancelled);
+            Assert.Equal(0, result.SucceededCount);
+        }
+        Assert.Equal("old video", File.ReadAllText(target));
+        Assert.Equal("new video", File.ReadAllText(source));
+        Assert.Empty(Directory.GetFiles(dst, "*.orbit_part_*"));
+    }
+
     public void Dispose()
     {
         if (!Directory.Exists(_root))
