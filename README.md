@@ -98,6 +98,7 @@ Shortcuts marked *(Customizable)* can be rebound in **Settings → Keyboard Shor
 | `F2` / `Ctrl+M` | Rename Item / Batch Rename Tool *(Customizable)* |
 | `Ctrl+Z` | Undo Last Batch Rename |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste (Windows Explorer compatible) |
+| Type a name / repeat its first character | Jump to a matching file or folder / cycle matches (all view modes) |
 | `Ctrl+Shift+C` | Copy Full Path(s) |
 | `Delete` / `Shift+Delete` | Recycle Bin / Permanent Delete |
 | `Ctrl+Shift+N` / `Ctrl+N` | New Folder / New Empty Text File |

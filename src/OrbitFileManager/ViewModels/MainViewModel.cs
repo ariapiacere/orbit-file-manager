@@ -1900,6 +1900,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     public async Task RefreshAffectedTabsAsync()
     {
+        // A replacement can have the same size and timestamp as the previous file.
+        _thumbnailService.ClearCache();
         foreach (var tab in GetAllOpenTabs())
             await tab.RefreshAsync(preserveSelection: true);
     }

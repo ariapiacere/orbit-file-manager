@@ -1,5 +1,19 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-06 — Sorting, type-to-select, and mixed transfer replacement
+
+- Natural name sorting puts `_` before digits and letters, retaining numeric ordering and directories first.
+- All five browser lists use WPF `TextSearch` against `FileEntryItem.Name`: type a prefix to select and scroll,
+  or repeat the first character to cycle matching items. Verified with routed text input, including `_` and Thai.
+- Both transfer paths clear the destination's read-only attribute before a same-volume overwrite move, matching
+  staged-copy behavior. Regression tests verify SHA-256 for a folder plus sibling MP4s in both selection orders,
+  through the queue and direct service, including equal sizes/timestamps and read-only destinations.
+- Thumbnail cache keys include size and modified time. Operation refreshes invalidate the cache even for
+  replacements with identical metadata; a generation prevents in-flight loads from restoring an obsolete entry.
+  Shell thumbnail and media property COM wrappers are released immediately so preview work does not retain them
+  until GC. A real MP4 preview was checked for immediate exclusive file access.
+- Validation: Release build and 75 xUnit cases pass; a separate WPF harness verifies text input in all five views.
+
 ## 0. Claude pass — 2026-11-03 (Section 2 bug is FIXED)
 
 **CancellationTokenSource crash.** The dialog the user saw came from `MainViewModel.Dispose()` (window close)

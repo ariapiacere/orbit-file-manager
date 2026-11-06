@@ -287,9 +287,10 @@ public sealed class PreviewService
             Guid iid = new("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"); // IPropertyStore
             if (SHGetPropertyStoreFromParsingName(filePath, IntPtr.Zero, 0, ref iid, out IntPtr storePtr) == 0 && storePtr != IntPtr.Zero)
             {
+                IPropertyStore? store = null;
                 try
                 {
-                    var store = (IPropertyStore)Marshal.GetTypedObjectForIUnknown(storePtr, typeof(IPropertyStore));
+                    store = (IPropertyStore)Marshal.GetTypedObjectForIUnknown(storePtr, typeof(IPropertyStore));
 
                     // System.Media.Duration (100-ns units): {64440490-4C8B-11D1-8B70-080036B11A03}, 3
                     ulong? duration100Ns = ReadUInt64Prop(store, new Guid("64440490-4C8B-11D1-8B70-080036B11A03"), 3);
@@ -315,6 +316,8 @@ public sealed class PreviewService
                 }
                 finally
                 {
+                    if (store is not null)
+                        Marshal.ReleaseComObject(store);
                     Marshal.Release(storePtr);
                 }
             }

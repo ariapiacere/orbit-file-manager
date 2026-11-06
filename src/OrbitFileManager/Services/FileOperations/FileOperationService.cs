@@ -581,6 +581,13 @@ public sealed class FileOperationService
             if (overwrite && Directory.Exists(destinationFile))
                 throw new IOException("Cannot overwrite a directory with a file.");
 
+            if (overwrite && File.Exists(destinationFile))
+            {
+                FileAttributes attrs = File.GetAttributes(destinationFile);
+                if ((attrs & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(destinationFile, attrs & ~FileAttributes.ReadOnly);
+            }
+
             File.Move(sourceFile, destinationFile, overwrite: overwrite);
             return;
         }

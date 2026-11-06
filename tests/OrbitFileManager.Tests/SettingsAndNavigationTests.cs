@@ -54,6 +54,25 @@ public sealed class SettingsAndNavigationTests : IDisposable
     }
 
     [Fact]
+    public void BrowserTab_SortsUnderscorePrefixesBeforeNumbersAndLetters()
+    {
+        string[] names = ["sc_10", "0X", "_xxxx", "sc_2", "__first", "_2", "_10"];
+        var items = names.Select(name => new FileEntryItem
+        {
+            Name = name,
+            FullPath = Path.Combine(_tempRoot, name),
+            IsDirectory = true,
+            TypeDescription = "Folder",
+            FormattedSize = string.Empty,
+            AttributesSummary = string.Empty
+        }).ToList();
+
+        string[] expected = ["__first", "_2", "_10", "_xxxx", "0X", "sc_2", "sc_10"];
+        Assert.Equal(expected, BrowserTabViewModel.SortEntries(items, SortColumn.Name, false).Select(i => i.Name));
+        Assert.Equal(expected.Reverse(), BrowserTabViewModel.SortEntries(items, SortColumn.Name, true).Select(i => i.Name));
+    }
+
+    [Fact]
     public async Task BrowserTab_SupportsHistoryNavigationSortingAndQuickFilter()
     {
         string dirA = Path.Combine(_tempRoot, "FolderA");

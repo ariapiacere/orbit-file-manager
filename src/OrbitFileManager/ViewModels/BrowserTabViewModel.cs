@@ -595,6 +595,12 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             }
             else
             {
+                // Keep underscore-prefixed project folders ahead of numbers and letters.
+                if (a[ia] == '_' && b[ib] != '_')
+                    return -1;
+                if (b[ib] == '_' && a[ia] != '_')
+                    return 1;
+
                 int charCmp = char.ToUpperInvariant(a[ia]).CompareTo(char.ToUpperInvariant(b[ib]));
                 if (charCmp != 0)
                     return charCmp;

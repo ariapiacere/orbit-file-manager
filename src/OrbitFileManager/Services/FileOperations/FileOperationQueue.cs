@@ -452,6 +452,13 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
 
         if (isMove && sameVolume)
         {
+            if (overwrite && File.Exists(destFile))
+            {
+                FileAttributes attrs = File.GetAttributes(destFile);
+                if ((attrs & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(destFile, attrs & ~FileAttributes.ReadOnly);
+            }
+
             File.Move(sourceFile, destFile, overwrite: overwrite);
             onBytesCopied(fileLen);
             return;

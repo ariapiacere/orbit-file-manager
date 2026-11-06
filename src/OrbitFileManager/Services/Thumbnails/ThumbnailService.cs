@@ -13,6 +13,7 @@ public sealed class ThumbnailService
     private const int MaxCacheEntries = 512;
     private readonly ConcurrentDictionary<string, BitmapSource?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _concurrencyGate = new(4, 4);
+    private int _cacheGeneration;
 
     private static readonly HashSet<string> SupportedThumbnailExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -55,7 +56,24 @@ public sealed class ThumbnailService
 
     public BitmapSource? GetOrCreateThumbnail(string fullPath, int pixelSize = 128)
     {
-        string key = $"{pixelSize}|{fullPath}";
+        int generation = Volatile.Read(ref _cacheGeneration);
+        string key;
+        try
+        {
+            var info = new FileInfo(fullPath);
+            if (!info.Exists)
+                return null;
+            key = $"{generation}|{pixelSize}|{fullPath}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+
         if (_cache.TryGetValue(key, out var cached))
             return cached;
 
@@ -67,6 +85,13 @@ public sealed class ThumbnailService
         return generated;
     }
 
+    public void ClearCache()
+    {
+        // In-flight loads from before a replacement must not repopulate the current cache.
+        Interlocked.Increment(ref _cacheGeneration);
+        _cache.Clear();
+    }
+
     public static BitmapSource? TryExtractShellImage(string fullPath, int size, bool thumbnailOnly = true)
     {
         if (string.IsNullOrWhiteSpace(fullPath) || fullPath.StartsWith(@"\\", StringComparison.Ordinal))
@@ -75,6 +100,7 @@ public sealed class ThumbnailService
         Guid iid = new("bcc18b79-ba16-442f-80c4-8a59c30c463b"); // IShellItemImageFactory
         IntPtr factoryPtr = IntPtr.Zero;
         IntPtr hBitmap = IntPtr.Zero;
+        IShellItemImageFactory? factory = null;
 
         try
         {
@@ -82,7 +108,7 @@ public sealed class ThumbnailService
             if (hr != 0 || factoryPtr == IntPtr.Zero)
                 return null;
 
-            var factory = (IShellItemImageFactory)Marshal.GetTypedObjectForIUnknown(factoryPtr, typeof(IShellItemImageFactory));
+            factory = (IShellItemImageFactory)Marshal.GetTypedObjectForIUnknown(factoryPtr, typeof(IShellItemImageFactory));
             SIIGBF flags = SIIGBF.SIIGBF_BIGGERSIZEOK;
             if (thumbnailOnly)
                 flags |= SIIGBF.SIIGBF_THUMBNAILONLY;
@@ -107,6 +133,8 @@ public sealed class ThumbnailService
         {
             if (hBitmap != IntPtr.Zero)
                 DeleteObject(hBitmap);
+            if (factory is not null)
+                Marshal.ReleaseComObject(factory);
             if (factoryPtr != IntPtr.Zero)
                 Marshal.Release(factoryPtr);
         }

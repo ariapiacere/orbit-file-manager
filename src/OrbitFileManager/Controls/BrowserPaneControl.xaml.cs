@@ -65,6 +65,8 @@ public partial class BrowserPaneControl : UserControl
 
         foreach (ListView list in new[] { DetailsListView, CompactListView, SmallIconsListView, LargeIconsListView, ThumbnailsListView })
         {
+            list.IsTextSearchEnabled = true;
+            TextSearch.SetTextPath(list, nameof(FileEntryItem.Name));
             list.PreviewMouseLeftButtonUp += FileListView_PreviewMouseLeftButtonUp;
             list.LostMouseCapture += FileListView_LostMouseCapture;
         }
