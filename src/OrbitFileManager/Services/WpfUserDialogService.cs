@@ -86,11 +86,18 @@ public sealed class WpfUserDialogService : IUserDialogService
 
     public bool ShowSettingsDialog(AppSettings currentSettings, ShortcutService? shortcutService, string storagePath, bool isPortable)
     {
-        var dialog = new SettingsDialog(currentSettings, shortcutService, storagePath, isPortable, _themeService.CurrentTheme == AppThemeMode.Dark)
+        var dialog = new SettingsDialog(
+            currentSettings, shortcutService, storagePath, isPortable, _themeService.CurrentTheme == AppThemeMode.Dark,
+            previewTheme: (mode, accent) => _themeService.ApplyTheme(mode, accent))
         {
             Owner = GetActiveOwnerWindow()
         };
-        return dialog.ShowDialog() == true;
+
+        bool saved = dialog.ShowDialog() == true;
+        // Undo a live preview the user did not keep.
+        if (!saved && (_themeService.CurrentTheme != currentSettings.Theme || _themeService.CurrentAccent != currentSettings.Accent))
+            _themeService.ApplyTheme(currentSettings.Theme, currentSettings.Accent);
+        return saved;
     }
 
     public int? ShowBatchRenameDialog(BatchRenameService renameService, IReadOnlyList<string> sourcePaths)

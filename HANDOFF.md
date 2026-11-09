@@ -92,6 +92,19 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
 - Theme: "Graphite & Signal Orange". Accent `#FF7A1A` on warm graphite in dark mode, `#EA580C` on zinc greys
   in light mode. Accent buttons use dark ink (`AccentForegroundBrush` `#1A1108`). Danger is rose so it never
   reads as the accent.
+- Accent presets (Settings > Appearance > Accent, saved as `AppSettings.Accent`):
+  - Six presets: Signal Orange (default), Orbit Blue, Lagoon Teal, Nebula Violet, Aurora Green, Graphite Mono.
+    They are defined in `Services/AccentPalettes.cs`.
+  - Each preset has one base colour per mode. Hover, selection, tab glow and button ink are derived from it, and
+    the ink is dark or white, whichever has more contrast.
+  - In dark mode each preset also brings its own greys (cool slate for blue, plum for violet, and so on).
+    Light mode keeps the zinc greys for every preset.
+  - Orange adds nothing: its colours are DarkTheme.xaml / LightTheme.xaml as hand-tuned. Any other preset is an
+    extra ResourceDictionary that `ThemeService.ApplyTheme(mode, accent)` inserts right after the base theme.
+  - The dialog previews the mode and accent live; Cancel puts the saved ones back (`WpfUserDialogService`).
+  - `AccentPaletteTests` check contrast for every preset: button text 4.5:1, accent on the list background 3:1.
+  - The UI harness `accents` mode tests preview, Cancel and Save, and renders a contact sheet of all 12 looks.
+  - The exe icon stays orange.
 - Signature: the selected row shows an orange rail on its leading edge (in `ModernFileListItemStyle`) instead
   of an outline box. The selected tab of the active pane glows orange (`ActiveTabGlowBrush` /
   `ActiveTabGlowBorderBrush`, fading into the toolbar colour). In dual-pane mode the other pane's selected tab

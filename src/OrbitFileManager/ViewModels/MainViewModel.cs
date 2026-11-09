@@ -291,7 +291,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ShowToolbarDualPane = settings.ShowToolbarDualPane;
         ShowToolbarToolsMenu = settings.ShowToolbarToolsMenu;
         CurrentTheme = settings.Theme;
-        _themeService.ApplyTheme(settings.Theme);
+        _themeService.ApplyTheme(settings.Theme, settings.Accent);
 
         LoadSidebarData();
         ReloadSavedWorkspaces();
@@ -1693,8 +1693,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         bool previousHidden = _settingsService.Current.ShowHiddenFiles;
         bool previousSystem = _settingsService.Current.ShowSystemFiles;
-        AppThemeMode previousTheme = _settingsService.Current.Theme;
 
+        // The dialog previews theme and accent live and puts the saved ones back when it is cancelled.
         bool saved = _dialogService.ShowSettingsDialog(
             _settingsService.Current,
             _shortcutService,
@@ -1713,11 +1713,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ShowToolbarDualPane = _settingsService.Current.ShowToolbarDualPane;
         ShowToolbarToolsMenu = _settingsService.Current.ShowToolbarToolsMenu;
 
-        if (_settingsService.Current.Theme != previousTheme)
-        {
-            CurrentTheme = _settingsService.Current.Theme;
-            _themeService.ApplyTheme(CurrentTheme);
-        }
+        CurrentTheme = _settingsService.Current.Theme;
+        if (_themeService.CurrentTheme != CurrentTheme || _themeService.CurrentAccent != _settingsService.Current.Accent)
+            _themeService.ApplyTheme(CurrentTheme, _settingsService.Current.Accent);
 
         _settingsService.Save();
 

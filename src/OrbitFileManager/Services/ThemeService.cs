@@ -9,12 +9,17 @@ public sealed class ThemeService : IThemeService
 {
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     private ResourceDictionary? _activeThemeDictionary;
+    private ResourceDictionary? _accentDictionary;
 
     public AppThemeMode CurrentTheme { get; private set; } = AppThemeMode.Dark;
+    public AppAccent CurrentAccent { get; private set; } = AppAccent.Orange;
 
-    public void ApplyTheme(AppThemeMode mode)
+    public void ApplyTheme(AppThemeMode mode) => ApplyTheme(mode, CurrentAccent);
+
+    public void ApplyTheme(AppThemeMode mode, AppAccent accent)
     {
         CurrentTheme = mode;
+        CurrentAccent = accent;
 
         if (Application.Current is null)
             return;
@@ -48,6 +53,13 @@ public sealed class ThemeService : IThemeService
         }
 
         _activeThemeDictionary = nextDict;
+
+        // The accent preset sits right after the base theme, so its brushes win over the base ones.
+        if (_accentDictionary is not null)
+            merged.Remove(_accentDictionary);
+        _accentDictionary = AccentPalettes.BuildOverrides(accent, mode == AppThemeMode.Dark);
+        if (_accentDictionary is not null)
+            merged.Insert(merged.IndexOf(nextDict) + 1, _accentDictionary);
 
         foreach (Window window in Application.Current.Windows)
             ApplyWindowTitleBarTheme(window, mode == AppThemeMode.Dark);

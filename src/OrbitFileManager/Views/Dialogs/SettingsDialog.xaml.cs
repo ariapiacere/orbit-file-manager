@@ -6,8 +6,10 @@ using OrbitFileManager.Utilities;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace OrbitFileManager.Views.Dialogs;
 
@@ -16,21 +18,28 @@ public partial class SettingsDialog : Window
     private readonly AppSettings _settings;
     private readonly ShortcutService? _shortcutService;
     private readonly string _storagePath;
+    private readonly Action<AppThemeMode, AppAccent>? _previewTheme;
+    private AppAccent _selectedAccent;
+    private bool _initializing = true;
 
+    /// <param name="previewTheme">Applies a theme and accent to the whole app while the user tries them out.</param>
     public SettingsDialog(
         AppSettings settings,
         ShortcutService? shortcutService,
         string storagePath,
         bool isPortable,
-        bool useDarkTitleBar)
+        bool useDarkTitleBar,
+        Action<AppThemeMode, AppAccent>? previewTheme = null)
     {
         InitializeComponent();
         _settings = settings;
         _shortcutService = shortcutService;
         _storagePath = storagePath;
+        _previewTheme = previewTheme;
 
         DarkThemeRadio.IsChecked = settings.Theme == AppThemeMode.Dark;
         LightThemeRadio.IsChecked = settings.Theme == AppThemeMode.Light;
+        BuildAccentSwatches(settings.Accent);
         ShowHiddenCheck.IsChecked = settings.ShowHiddenFiles;
         ShowSystemCheck.IsChecked = settings.ShowSystemFiles;
         ConfirmRecycleCheck.IsChecked = settings.ConfirmRecycleBinDelete;
@@ -54,6 +63,60 @@ public partial class SettingsDialog : Window
 
         RefreshShortcutsList();
         SourceInitialized += (_, _) => ThemeService.ApplyWindowTitleBarTheme(this, useDarkTitleBar);
+        _initializing = false;
+    }
+
+    private AppThemeMode SelectedMode => LightThemeRadio.IsChecked == true ? AppThemeMode.Light : AppThemeMode.Dark;
+
+    private void BuildAccentSwatches(AppAccent current)
+    {
+        var style = (Style)FindResource("AccentSwatchStyle");
+        foreach (AccentPalette palette in AccentPalettes.All)
+        {
+            var swatch = new RadioButton { Style = style, Tag = palette, ToolTip = palette.Name };
+            AutomationProperties.SetName(swatch, $"{palette.Name} accent");
+            swatch.Checked += AccentSwatch_Checked;
+            AccentSwatchPanel.Children.Add(swatch);
+        }
+
+        UpdateSwatchColors();
+        foreach (RadioButton swatch in AccentSwatchPanel.Children)
+            swatch.IsChecked = ((AccentPalette)swatch.Tag).Accent == current;
+    }
+
+    // Each dot shows the accent as it looks in the selected mode.
+    private void UpdateSwatchColors()
+    {
+        bool dark = SelectedMode == AppThemeMode.Dark;
+        foreach (RadioButton swatch in AccentSwatchPanel.Children)
+        {
+            var brush = new SolidColorBrush(AccentPalettes.AccentFor(((AccentPalette)swatch.Tag).Accent, dark));
+            brush.Freeze();
+            swatch.Background = brush;
+        }
+    }
+
+    private void AccentSwatch_Checked(object sender, RoutedEventArgs e)
+    {
+        var palette = (AccentPalette)((RadioButton)sender).Tag;
+        _selectedAccent = palette.Accent;
+        AccentNameText.Text = palette.Name;
+        PreviewTheme();
+    }
+
+    private void ThemeMode_Checked(object sender, RoutedEventArgs e)
+    {
+        if (AccentSwatchPanel is null)
+            return; // still building the dialog
+
+        UpdateSwatchColors();
+        PreviewTheme();
+    }
+
+    private void PreviewTheme()
+    {
+        if (!_initializing)
+            _previewTheme?.Invoke(SelectedMode, _selectedAccent);
     }
 
     private void RefreshShortcutsList()
@@ -138,7 +201,8 @@ public partial class SettingsDialog : Window
             return;
         }
 
-        _settings.Theme = LightThemeRadio.IsChecked == true ? AppThemeMode.Light : AppThemeMode.Dark;
+        _settings.Theme = SelectedMode;
+        _settings.Accent = _selectedAccent;
         _settings.ShowHiddenFiles = ShowHiddenCheck.IsChecked == true;
         _settings.ShowSystemFiles = ShowSystemCheck.IsChecked == true;
         _settings.ConfirmRecycleBinDelete = ConfirmRecycleCheck.IsChecked == true;

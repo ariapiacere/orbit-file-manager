@@ -6,6 +6,17 @@ public enum AppThemeMode
     Light = 1
 }
 
+/// <summary>Accent colour preset; see <c>Services/AccentPalettes.cs</c>. Values are stored by name, so never rename one.</summary>
+public enum AppAccent
+{
+    Orange = 0,
+    Blue = 1,
+    Teal = 2,
+    Violet = 3,
+    Green = 4,
+    Mono = 5
+}
+
 public enum BrowserViewMode
 {
     Details = 0,
@@ -28,6 +39,7 @@ public enum SortColumn
 public sealed class AppSettings
 {
     public AppThemeMode Theme { get; set; } = AppThemeMode.Dark;
+    public AppAccent Accent { get; set; } = AppAccent.Orange;
     public BrowserViewMode DefaultViewMode { get; set; } = BrowserViewMode.Details;
     public bool ShowHiddenFiles { get; set; } = false;
     public bool ShowSystemFiles { get; set; } = false;

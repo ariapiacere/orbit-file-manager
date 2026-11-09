@@ -52,5 +52,10 @@ public interface IUserDialogService
 public interface IThemeService
 {
     AppThemeMode CurrentTheme { get; }
+    AppAccent CurrentAccent { get; }
+
+    /// <summary>Switches dark/light mode and keeps the current accent.</summary>
     void ApplyTheme(AppThemeMode mode);
+
+    void ApplyTheme(AppThemeMode mode, AppAccent accent);
 }

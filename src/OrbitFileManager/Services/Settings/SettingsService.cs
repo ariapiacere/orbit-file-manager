@@ -98,6 +98,8 @@ public sealed class SettingsService
 
     private static void Sanitize(AppSettings settings)
     {
+        if (!Enum.IsDefined(settings.Accent))
+            settings.Accent = AppAccent.Orange;
         settings.WindowWidth = Math.Clamp(settings.WindowWidth, 860, 5120);
         settings.WindowHeight = Math.Clamp(settings.WindowHeight, 560, 2880);
         settings.SidebarWidth = Math.Clamp(settings.SidebarWidth, 180, 520);

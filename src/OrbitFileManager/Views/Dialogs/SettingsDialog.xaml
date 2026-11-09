@@ -14,6 +14,40 @@
         Foreground="{DynamicResource TextPrimaryBrush}"
         FontFamily="Segoe UI">
 
+    <Window.Resources>
+        <!-- Accent swatch: a filled dot; a ring around it marks the chosen preset (hover shows a faint ring). -->
+        <Style x:Key="AccentSwatchStyle" TargetType="{x:Type RadioButton}">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="GroupName" Value="Accent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type RadioButton}">
+                        <Grid Background="Transparent">
+                            <Ellipse x:Name="Ring" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="2" Opacity="0" />
+                            <Ellipse Margin="6" Fill="{TemplateBinding Background}" Stroke="{DynamicResource BorderStrongBrush}" StrokeThickness="1" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Ring" Property="Opacity" Value="0.35" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Ring" Property="Opacity" Value="0.6" />
+                                <Setter TargetName="Ring" Property="StrokeDashArray" Value="2 1.5" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Ring" Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Border Padding="20" Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
@@ -39,10 +73,16 @@
                         <StackPanel>
                             <!-- Theme -->
                             <TextBlock Text="APPEARANCE" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8" />
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <RadioButton x:Name="DarkThemeRadio" Content="Dark Mode (Graphite)" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,20,0" VerticalContentAlignment="Center" />
-                                <RadioButton x:Name="LightThemeRadio" Content="Light Mode (Daylight)" Foreground="{DynamicResource TextPrimaryBrush}" VerticalContentAlignment="Center" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <RadioButton x:Name="DarkThemeRadio" Content="Dark Mode" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,20,0" VerticalContentAlignment="Center" Checked="ThemeMode_Checked" />
+                                <RadioButton x:Name="LightThemeRadio" Content="Light Mode" Foreground="{DynamicResource TextPrimaryBrush}" VerticalContentAlignment="Center" Checked="ThemeMode_Checked" />
                             </StackPanel>
+                            <DockPanel Margin="0,0,0,14">
+                                <TextBlock Text="Accent" DockPanel.Dock="Left" Width="58" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                <StackPanel x:Name="AccentSwatchPanel" Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center"
+                                            KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Once" />
+                                <TextBlock x:Name="AccentNameText" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                            </DockPanel>
 
                             <!-- File Visibility & Safety -->
                             <TextBlock Text="BROWSING &amp; SAFETY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,8" />
