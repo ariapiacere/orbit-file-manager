@@ -177,6 +177,7 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
@@ -202,15 +203,28 @@
                                                               VerticalAlignment="Center"
                                                               Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}" />
 
+                                                        <!-- Folder not available (deleted, renamed, drive or share offline) -->
+                                                        <Path Grid.Column="2"
+                                                              Data="{StaticResource IconWarning}"
+                                                              Stroke="{DynamicResource DangerBrush}"
+                                                              StrokeThickness="1.8"
+                                                              StrokeLineJoin="Round"
+                                                              Width="11" Height="11"
+                                                              Stretch="Uniform"
+                                                              Margin="0,0,5,0"
+                                                              VerticalAlignment="Center"
+                                                              ToolTip="This folder is not available right now"
+                                                              Visibility="{Binding IsUnavailable, Converter={StaticResource BoolToVis}}" />
+
                                                         <TextBlock x:Name="TabTitleText"
-                                                                   Grid.Column="2"
+                                                                   Grid.Column="3"
                                                                    Text="{Binding DisplayTitle}"
                                                                    FontSize="12"
                                                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    VerticalAlignment="Center" />
 
-                                                        <Button Grid.Column="3"
+                                                        <Button Grid.Column="4"
                                                                 Style="{StaticResource ToolbarButtonStyle}"
                                                                 Padding="4,2"
                                                                 Margin="5,0,0,0"
@@ -395,10 +409,33 @@
                     BorderThickness="0,0,0,1"
                     Padding="10,6"
                     Visibility="{Binding ActiveTab.ErrorMessage, Converter={StaticResource NullToVis}}">
-                <TextBlock Text="{Binding ActiveTab.ErrorMessage}"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           FontSize="12"
-                           TextWrapping="Wrap" />
+                <DockPanel LastChildFill="True">
+                    <!-- The tab's own folder is unavailable: it stays open on that path so it can be retried. -->
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="12,0,0,0"
+                                Visibility="{Binding ActiveTab.IsUnavailable, Converter={StaticResource BoolToVis}}">
+                        <Button x:Name="UnavailableRetryButton"
+                                Content="Retry"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Padding="10,3"
+                                ToolTip="Try to open this folder again (F5)"
+                                Click="UnavailableRetry_Click" />
+                        <Button x:Name="UnavailableOpenParentButton"
+                                Content="Open nearest folder"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Padding="10,3"
+                                Margin="6,0,0,0"
+                                ToolTip="Open the closest folder above this one that exists (it stays in Back history)"
+                                Click="UnavailableOpenParent_Click" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding ActiveTab.ErrorMessage}"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </DockPanel>
             </Border>
 
             <!-- ─── ROW 3: FILE BROWSER VIEWS (5 MODES) ─────────────────────── -->

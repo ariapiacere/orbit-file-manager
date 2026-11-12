@@ -520,6 +520,27 @@ public partial class BrowserPaneControl : UserControl
             tab.QuickFilterText = string.Empty;
     }
 
+    // ─── Unavailable folder banner ────────────────────────────────────────────
+
+    private void UnavailableRetry_Click(object sender, RoutedEventArgs e)
+    {
+        PaneVm?.Activate();
+        if (PaneVm?.ActiveTab is { } tab)
+            _ = tab.RefreshAsync(preserveSelection: true);
+    }
+
+    private async void UnavailableOpenParent_Click(object sender, RoutedEventArgs e)
+    {
+        if (PaneVm is not { ActiveTab: { } tab } pane)
+            return;
+
+        pane.Activate();
+        string? target = await tab.FindNearestExistingFolderAsync();
+        // In place, so Back returns to the unavailable folder; a locked tab opens it in a new tab instead.
+        if (target is not null && ReferenceEquals(pane.ActiveTab, tab))
+            await pane.NavigateActiveOrSpawnIfLockedAsync(target);
+    }
+
     // ─── Column Sorting ────────────────────────────────────────────────────────
 
     private void SortHeader_Name_Click(object sender, RoutedEventArgs e) => PaneVm?.ActiveTab?.ToggleSort(SortColumn.Name);

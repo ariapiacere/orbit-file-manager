@@ -24,6 +24,14 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
     private string? _loadingPath;
     private bool _disposed;
 
+    // Session restore: the saved folder and selection, used until the first load of a restored tab finishes, so a
+    // session saved meanwhile (autosave) still holds them even if that folder is slow or offline.
+    private string? _sessionPath;
+    private string? _sessionSelectPath;
+
+    /// <summary>Most entries kept per direction when back/forward history is saved with the session.</summary>
+    public const int MaxSavedHistoryEntries = 50;
+
     // Folder watching. Fields without a note are only touched on the UI thread.
     private static readonly TimeSpan RefreshDebounce = TimeSpan.FromMilliseconds(350);
     private const long RefreshMaxDelayMs = 1500;
@@ -89,6 +97,13 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string? _errorMessage;
+
+    /// <summary>
+    /// The tab's own folder could not be opened (deleted, renamed, drive or network share offline, access denied).
+    /// The tab keeps the path so it can be retried; the pane offers Retry and Open nearest folder.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isUnavailable;
 
     [ObservableProperty]
     private FileEntryItem? _selectedItem;
@@ -261,10 +276,15 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
                 ErrorMessage = result.ErrorMessage;
                 if (string.IsNullOrEmpty(CurrentPath))
                 {
+                    // First load of this tab (a restored session): keep the tab on its folder instead of losing it.
                     CurrentPath = normalized;
                     AddressInputText = normalized;
                     UpdateTitleAndBreadcrumbs(normalized);
+                    UpdateNavigationCapabilities();
                 }
+
+                if (PathValidator.PathsEqual(CurrentPath, normalized))
+                    IsUnavailable = true;
                 return false;
             }
 
@@ -277,6 +297,9 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             CurrentPath = result.NormalizedPath;
             AddressInputText = result.NormalizedPath;
             IsAddressEditing = false;
+            IsUnavailable = false;
+            _sessionPath = null;
+            _sessionSelectPath = null;
 
             UpdateNavigationCapabilities();
             UpdateTitleAndBreadcrumbs(result.NormalizedPath);
@@ -325,7 +348,8 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         if (IsSearchTab || string.IsNullOrWhiteSpace(CurrentPath))
             return;
 
-        string? pathToReselect = explicitSelectPath ?? (preserveSelection ? SelectedItem?.FullPath : null);
+        string? pathToReselect = explicitSelectPath
+            ?? (preserveSelection ? SelectedItem?.FullPath ?? (IsUnavailable ? _sessionSelectPath : null) : null);
         await NavigateAsync(CurrentPath, recordHistory: false, selectPathAfterLoad: pathToReselect);
     }
 
@@ -451,9 +475,10 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
 
     public TabSessionState ToSessionState()
     {
+        bool loaded = !string.IsNullOrEmpty(CurrentPath);
         return new TabSessionState
         {
-            Path = CurrentPath,
+            Path = loaded ? CurrentPath : _sessionPath ?? string.Empty,
             CustomLabel = CustomLabel,
             IsPinned = IsPinned,
             IsLocked = IsLocked,
@@ -461,8 +486,78 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             ViewMode = ViewMode,
             SortColumn = SortColumn,
             SortDescending = SortDescending,
-            GroupByType = GroupByType
+            GroupByType = GroupByType,
+            // Until the restored folder has loaded (or while it is unavailable) keep the saved selection.
+            SelectedPath = SelectedItem?.FullPath ?? (loaded && !IsUnavailable ? null : _sessionSelectPath),
+            // Stacks enumerate newest first; saved oldest first so pushing them back in order rebuilds them.
+            BackHistory = _backHistory.Count == 0 ? null : _backHistory.Take(MaxSavedHistoryEntries).Reverse().ToList(),
+            ForwardHistory = _forwardHistory.Count == 0 ? null : _forwardHistory.Take(MaxSavedHistoryEntries).Reverse().ToList()
         };
+    }
+
+    /// <summary>
+    /// Sets up a tab from a saved session before its folder is loaded: title, address and breadcrumbs show the saved
+    /// folder at once, and <see cref="ToSessionState"/> keeps returning it until the load finishes. Does no disk I/O,
+    /// so a slow or offline network path cannot hold up startup. Call <see cref="LoadRestoredFolderAsync"/> next.
+    /// </summary>
+    public void PrepareForRestore(TabSessionState state)
+    {
+        ApplySessionMetadata(state);
+        _sessionPath = PathValidator.NormalizePath(state.Path);
+        _sessionSelectPath = state.SelectedPath;
+        AddressInputText = _sessionPath;
+        UpdateTitleAndBreadcrumbs(_sessionPath);
+    }
+
+    /// <summary>Loads the folder given to <see cref="PrepareForRestore"/>, reselecting the saved item.</summary>
+    public Task<bool> LoadRestoredFolderAsync() =>
+        string.IsNullOrEmpty(_sessionPath)
+            ? Task.FromResult(false)
+            : NavigateAsync(_sessionPath, recordHistory: false, selectPathAfterLoad: _sessionSelectPath);
+
+    /// <summary>
+    /// For an unavailable folder: finds the closest parent that exists, checked off the UI thread because an offline
+    /// share can take many seconds to answer. Returns null (and explains why in <see cref="ErrorMessage"/>) when
+    /// there is none, or when the tab moved to another folder meanwhile.
+    /// </summary>
+    public async Task<string?> FindNearestExistingFolderAsync()
+    {
+        string start = CurrentPath;
+        if (string.IsNullOrEmpty(start))
+            return null;
+
+        bool showBusy = !IsLoading;
+        if (showBusy)
+            IsLoading = true;
+
+        string? target;
+        try
+        {
+            target = await Task.Run(() =>
+            {
+                for (string? candidate = PathValidator.GetParentDirectoryPath(start);
+                     candidate is not null;
+                     candidate = PathValidator.GetParentDirectoryPath(candidate))
+                {
+                    if (Directory.Exists(candidate))
+                        return candidate;
+                }
+
+                return null;
+            });
+        }
+        finally
+        {
+            if (showBusy && _loadCts is null)
+                IsLoading = false;
+        }
+
+        if (_disposed || !PathValidator.PathsEqual(CurrentPath, start))
+            return null; // the tab moved on meanwhile
+
+        if (target is null)
+            ErrorMessage = $"No folder above '{start}' is reachable right now. Try again when the drive or network share is back.";
+        return target;
     }
 
     public void ApplySessionMetadata(TabSessionState state)
@@ -475,6 +570,22 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         SortColumn = state.SortColumn;
         SortDescending = state.SortDescending;
         GroupByType = state.GroupByType;
+
+        _backHistory.Clear();
+        foreach (string path in state.BackHistory ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+                _backHistory.Push(path);
+        }
+
+        _forwardHistory.Clear();
+        foreach (string path in state.ForwardHistory ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+                _forwardHistory.Push(path);
+        }
+
+        UpdateNavigationCapabilities();
     }
 
     private void ApplyCollectionGrouping()

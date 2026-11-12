@@ -580,6 +580,16 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        SaveWindowAndSession();
+        _viewModel.Dispose();
+    }
+
+    /// <summary>
+    /// Saves window placement, panel widths and the open tabs. Called on close and when Windows signs out, restarts
+    /// or shuts down: WPF does not raise Closing in that case.
+    /// </summary>
+    public void SaveWindowAndSession()
+    {
         double sidebarW = _viewModel.ShowSidebar && SidebarColumn.ActualWidth >= 170
             ? SidebarColumn.ActualWidth
             : _savedSidebarWidth;
@@ -595,7 +605,5 @@ public partial class MainWindow : Window
             WindowState == WindowState.Maximized,
             sidebarW,
             previewW);
-
-        _viewModel.Dispose();
     }
 }

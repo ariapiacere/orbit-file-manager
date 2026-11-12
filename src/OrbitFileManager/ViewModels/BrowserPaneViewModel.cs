@@ -66,10 +66,12 @@ public partial class BrowserPaneViewModel : ObservableObject, IDisposable
     public async Task NewTabAsync(string? path = null)
     {
         Activate();
+        // An unavailable tab (offline share) is skipped without touching the disk: checking it can stall for many seconds.
+        string? activePath = ActiveTab is { IsUnavailable: false, CurrentPath: { Length: > 0 } current } ? current : null;
         string targetPath = !string.IsNullOrWhiteSpace(path) && System.IO.Directory.Exists(path)
             ? path
-            : (!string.IsNullOrWhiteSpace(ActiveTab?.CurrentPath) && System.IO.Directory.Exists(ActiveTab.CurrentPath)
-                ? ActiveTab.CurrentPath
+            : (activePath is not null && System.IO.Directory.Exists(activePath)
+                ? activePath
                 : _settingsService.Current.DefaultStartPath);
 
         var tab = CreateTabInstance();
@@ -261,12 +263,22 @@ public partial class BrowserPaneViewModel : ObservableObject, IDisposable
 
     public PaneSessionState ToSessionState()
     {
-        var tabs = Tabs
-            .Where(t => !t.IsSearchTab && !string.IsNullOrWhiteSpace(t.CurrentPath))
-            .Select(t => t.ToSessionState())
-            .ToList();
+        // Search tabs are not saved (their results cannot be restored), so the active index is counted among the
+        // saved tabs. An active search tab hands the mark to the closest saved tab before it.
+        var tabs = new List<TabSessionState>(Tabs.Count);
+        int activeAt = ActiveTab is null ? -1 : Tabs.IndexOf(ActiveTab);
+        int activeIdx = 0;
+        for (int i = 0; i < Tabs.Count; i++)
+        {
+            TabSessionState state = Tabs[i].ToSessionState();
+            if (Tabs[i].IsSearchTab || string.IsNullOrWhiteSpace(state.Path))
+                continue;
 
-        int activeIdx = ActiveTab is not null ? Math.Max(0, Tabs.IndexOf(ActiveTab)) : 0;
+            tabs.Add(state);
+            if (i <= activeAt)
+                activeIdx = tabs.Count - 1;
+        }
+
         return new PaneSessionState
         {
             Tabs = tabs,
@@ -274,35 +286,64 @@ public partial class BrowserPaneViewModel : ObservableObject, IDisposable
         };
     }
 
-    public async Task RestoreSessionAsync(PaneSessionState? state, string fallbackPath)
+    /// <summary>
+    /// Replaces the open tabs with a saved session. Every saved tab comes back, including ones whose folder is gone or
+    /// offline (they show as unavailable instead of being dropped). Tabs, titles and the active tab are set up at once
+    /// without touching the disk; the folders then load in parallel off the UI thread. With
+    /// <paramref name="waitForLoads"/> false the method returns before they finish, so a slow network path never
+    /// delays startup.
+    /// </summary>
+    public async Task RestoreSessionAsync(PaneSessionState? state, string fallbackPath, bool waitForLoads = true)
     {
         foreach (var existing in Tabs.ToList())
             existing.Dispose();
         Tabs.Clear();
 
-        if (state is not null && state.Tabs.Count > 0)
+        foreach (var tabState in state?.Tabs ?? [])
         {
-            foreach (var tabState in state.Tabs)
-            {
-                if (string.IsNullOrWhiteSpace(tabState.Path) || !System.IO.Directory.Exists(tabState.Path))
-                    continue;
+            if (tabState is null || string.IsNullOrWhiteSpace(tabState.Path))
+                continue;
 
-                var tab = CreateTabInstance();
-                tab.ApplySessionMetadata(tabState);
-                Tabs.Add(tab);
-                await tab.NavigateAsync(tabState.Path, recordHistory: false);
-            }
+            var tab = CreateTabInstance();
+            tab.PrepareForRestore(tabState);
+            Tabs.Add(tab);
         }
 
         if (Tabs.Count == 0)
         {
             var defaultTab = CreateTabInstance();
+            defaultTab.PrepareForRestore(new TabSessionState
+            {
+                Path = fallbackPath,
+                ViewMode = _settingsService.Current.DefaultViewMode
+            });
             Tabs.Add(defaultTab);
-            await defaultTab.NavigateAsync(fallbackPath, recordHistory: false);
         }
 
         int idx = state is not null ? Math.Clamp(state.ActiveTabIndex, 0, Tabs.Count - 1) : 0;
         ActiveTab = Tabs[idx];
+
+        // Active tab first so the folder the user looks at is listed first.
+        var loads = Tabs
+            .OrderBy(t => ReferenceEquals(t, ActiveTab) ? 0 : 1)
+            .Select(LoadRestoredTabAsync)
+            .ToList();
+
+        if (waitForLoads)
+            await Task.WhenAll(loads);
+    }
+
+    private static async Task LoadRestoredTabAsync(BrowserTabViewModel tab)
+    {
+        try
+        {
+            await tab.LoadRestoredFolderAsync();
+        }
+        catch (Exception ex)
+        {
+            tab.ErrorMessage = $"Could not open this folder: {ex.Message}";
+            tab.IsUnavailable = true;
+        }
     }
 
     public void Dispose()

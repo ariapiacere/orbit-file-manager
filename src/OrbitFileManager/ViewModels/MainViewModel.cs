@@ -12,6 +12,7 @@ using OrbitFileManager.Services.Thumbnails;
 using OrbitFileManager.Services.Updates;
 using OrbitFileManager.Utilities;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -50,6 +51,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private BrowserTabViewModel? _subscribedActiveTab;
     private bool _isSyncingNavigation;
     private bool _disposed;
+    private int _driveSummaryVersion;
+
+    // Session autosave: started once the saved tabs are restored; see StartSessionAutoSave.
+    private SessionAutoSaver? _sessionAutoSaver;
+    private readonly HashSet<BrowserTabViewModel> _sessionWatchedTabs = [];
+
+    /// <summary>Main-window properties that are part of the saved session.</summary>
+    private static readonly HashSet<string> SessionLayoutProperties =
+    [
+        nameof(IsDualPane), nameof(SplitOrientation), nameof(VerticalSplitRatio), nameof(HorizontalSplitRatio),
+        nameof(ActivePane), nameof(IsSyncNavigationEnabled)
+    ];
+
+    /// <summary>Tab properties that are part of the saved session (selection and history are caught by the timer).</summary>
+    private static readonly HashSet<string> SessionTabProperties =
+    [
+        nameof(BrowserTabViewModel.CurrentPath), nameof(BrowserTabViewModel.CustomLabel), nameof(BrowserTabViewModel.IsPinned),
+        nameof(BrowserTabViewModel.IsLocked), nameof(BrowserTabViewModel.LockedRootPath), nameof(BrowserTabViewModel.ViewMode),
+        nameof(BrowserTabViewModel.SortColumn), nameof(BrowserTabViewModel.SortDescending), nameof(BrowserTabViewModel.GroupByType),
+        nameof(BrowserTabViewModel.IsSearchTab)
+    ];
 
     public BrowserPaneViewModel LeftPane { get; }
     public BrowserPaneViewModel RightPane { get; }
@@ -267,6 +289,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         LeftPane.PropertyChanged += OnPanePropertyChanged;
         RightPane.PropertyChanged += OnPanePropertyChanged;
+        LeftPane.Tabs.CollectionChanged += OnPaneTabsChanged;
+        RightPane.Tabs.CollectionChanged += OnPaneTabsChanged;
+        PropertyChanged += OnSessionLayoutPropertyChanged;
 
         _activePane = LeftPane;
         LeftPane.IsActivePane = true;
@@ -296,20 +321,29 @@ public partial class MainViewModel : ObservableObject, IDisposable
         LoadSidebarData();
         ReloadSavedWorkspaces();
 
-        AppSessionState? session = settings.RestoreTabsOnStartup ? _sessionService.LoadSession() : null;
-        if (session is not null)
+        SessionLoadResult restored = settings.RestoreTabsOnStartup
+            ? _sessionService.LoadSessionWithRecovery()
+            : new SessionLoadResult(null, SessionLoadSource.None, null);
+        if (restored.Session is not null)
         {
-            await ApplySessionStateAsync(session);
+            // Tabs appear at once; their folders load in the background, so an offline share cannot hold up startup.
+            await ApplySessionStateAsync(restored.Session, waitForLoads: false);
         }
         else
         {
-            await LeftPane.RestoreSessionAsync(null, settings.DefaultStartPath);
-            await RightPane.RestoreSessionAsync(null, settings.DefaultStartPath);
+            await LeftPane.RestoreSessionAsync(null, settings.DefaultStartPath, waitForLoads: false);
+            await RightPane.RestoreSessionAsync(null, settings.DefaultStartPath, waitForLoads: false);
             ActivatePane(LeftPane);
         }
 
         RebindSubscribedActiveTab();
-        StatusMessage = "Ready";
+        StatusMessage = restored switch
+        {
+            { Source: SessionLoadSource.Backup } => "Tabs restored from the backup copy (the last session file was damaged or missing).",
+            { Source: SessionLoadSource.None, Problem: not null } => "The saved tabs could not be restored (the session file was damaged). Started fresh.",
+            _ => "Ready"
+        };
+        StartSessionAutoSave();
         _logger.Info("App", "Orbit File Manager initialized.", new { dualPane = IsDualPane, portable = _pathsService.IsPortableWritable, version = UpdateService.Format(UpdateService.CurrentVersion) });
 
         ReportLastUpdateResult();
@@ -341,6 +375,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (sender is not BrowserPaneViewModel pane || e.PropertyName != nameof(BrowserPaneViewModel.ActiveTab))
             return;
+
+        _sessionAutoSaver?.RequestSave();
 
         if (ReferenceEquals(pane, ActivePane))
             RebindSubscribedActiveTab();
@@ -1852,8 +1888,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
     }
 
-    public async Task ApplySessionStateAsync(AppSessionState session)
+    /// <summary>
+    /// Restores a saved session or workspace. With <paramref name="waitForLoads"/> false it returns as soon as the
+    /// tabs exist; their folders keep loading in the background.
+    /// </summary>
+    public async Task ApplySessionStateAsync(AppSessionState session, bool waitForLoads = true)
     {
+        session.Sanitize();
         string fallback = _settingsService.Current.DefaultStartPath;
         IsDualPane = session.IsDualPane;
         SplitOrientation = session.SplitOrientation;
@@ -1861,8 +1902,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         HorizontalSplitRatio = AppSessionState.ClampSplitRatio(session.HorizontalSplitRatio);
         IsSyncNavigationEnabled = session.IsSyncNavigationEnabled;
 
-        await LeftPane.RestoreSessionAsync(session.LeftPane, fallback);
-        await RightPane.RestoreSessionAsync(session.RightPane, fallback);
+        await LeftPane.RestoreSessionAsync(session.LeftPane, fallback, waitForLoads);
+        await RightPane.RestoreSessionAsync(session.RightPane, fallback, waitForLoads);
 
         if (IsDualPane && string.Equals(session.ActivePaneId, "Right", StringComparison.OrdinalIgnoreCase))
             ActivatePane(RightPane);
@@ -1894,6 +1935,57 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         _settingsService.Save();
         _sessionService.SaveSession(BuildCurrentSessionState());
+    }
+
+    // ─── Session autosave ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// From here on every tab and layout change is saved within about a second (and everything else every few
+    /// seconds), so the tabs survive a crash, a forced kill or a Windows restart, not only a normal close.
+    /// </summary>
+    private void StartSessionAutoSave()
+    {
+        if (_disposed || _sessionAutoSaver is not null || Application.Current?.Dispatcher is not { } dispatcher)
+            return;
+
+        SyncSessionWatchedTabs();
+        _sessionAutoSaver = new SessionAutoSaver(_sessionService, BuildCurrentSessionState, _logger, dispatcher);
+        _sessionAutoSaver.Start();
+    }
+
+    private void OnSessionLayoutPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not null && SessionLayoutProperties.Contains(e.PropertyName))
+            _sessionAutoSaver?.RequestSave();
+    }
+
+    private void OnPaneTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        SyncSessionWatchedTabs();
+        _sessionAutoSaver?.RequestSave(); // opened, closed, reordered
+    }
+
+    private void OnTabSessionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not null && SessionTabProperties.Contains(e.PropertyName))
+            _sessionAutoSaver?.RequestSave();
+    }
+
+    /// <summary>Watches exactly the open tabs (a Reset from Tabs.Clear() does not list the removed ones).</summary>
+    private void SyncSessionWatchedTabs()
+    {
+        var open = GetAllOpenTabs().ToHashSet();
+        foreach (var gone in _sessionWatchedTabs.Where(t => !open.Contains(t)).ToList())
+        {
+            gone.PropertyChanged -= OnTabSessionPropertyChanged;
+            _sessionWatchedTabs.Remove(gone);
+        }
+
+        foreach (var tab in open)
+        {
+            if (_sessionWatchedTabs.Add(tab))
+                tab.PropertyChanged += OnTabSessionPropertyChanged;
+        }
     }
 
     public async Task RefreshAffectedTabsAsync()
@@ -1961,35 +2053,46 @@ public partial class MainViewModel : ObservableObject, IDisposable
             tab.MarkCutItems(_activeCutPaths);
     }
 
-    private void UpdateDriveSpaceSummary(string? path)
+    private void UpdateDriveSpaceSummary(string? path) => _ = UpdateDriveSpaceSummaryAsync(path);
+
+    /// <summary>
+    /// Reads free space off the UI thread: a disconnected mapped drive (a restored tab on R:\ while the NAS is down)
+    /// can take many seconds to report that it is not ready. Only the newest request updates the status bar.
+    /// </summary>
+    private async Task UpdateDriveSpaceSummaryAsync(string? path)
     {
+        int version = ++_driveSummaryVersion;
         if (string.IsNullOrWhiteSpace(path))
         {
             DriveSpaceSummary = string.Empty;
             return;
         }
 
+        string summary = string.Empty;
         try
         {
             string? root = Path.GetPathRoot(path);
             if (string.IsNullOrEmpty(root) || root.StartsWith(@"\\", StringComparison.Ordinal))
             {
-                DriveSpaceSummary = root ?? string.Empty;
-                return;
+                summary = root ?? string.Empty;
             }
-
-            var drive = new DriveInfo(root);
-            if (drive.IsReady)
+            else
             {
-                DriveSpaceSummary = $"{root.TrimEnd('\\')} • {FileSizeFormatter.FormatBytes(drive.AvailableFreeSpace)} free of {FileSizeFormatter.FormatBytes(drive.TotalSize)}";
-                return;
+                summary = await Task.Run(() =>
+                {
+                    var drive = new DriveInfo(root);
+                    return drive.IsReady
+                        ? $"{root.TrimEnd('\\')} • {FileSizeFormatter.FormatBytes(drive.AvailableFreeSpace)} free of {FileSizeFormatter.FormatBytes(drive.TotalSize)}"
+                        : string.Empty;
+                });
             }
         }
         catch
         {
         }
 
-        DriveSpaceSummary = string.Empty;
+        if (version == _driveSummaryVersion)
+            DriveSpaceSummary = summary;
     }
 
     private void SyncRecentFoldersFromSettings()
@@ -2083,6 +2186,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
 
         _disposed = true;
+        _sessionAutoSaver?.Dispose(); // the window saved the final session just before
+        _sessionAutoSaver = null;
         CancellationHelper.CancelAndClear(ref _previewCts);
         CancellationHelper.CancelAndClear(ref _operationCts);
         CancellationHelper.CancelAndClear(ref _searchCts);

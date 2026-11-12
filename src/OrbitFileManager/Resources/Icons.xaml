@@ -69,6 +69,7 @@
     <Geometry x:Key="IconCopyPath">M10,13 A5,5 0 0,0 17.54,13.54 L19.5,11.5 A5,5 0 0,0 12.46,4.46 L11.3,5.6 M14,11 A5,5 0 0,0 6.46,10.46 L4.5,12.5 A5,5 0 0,0 11.54,19.54 L12.7,18.4</Geometry>
     <Geometry x:Key="IconChevronRight">M9,6 L15,12 L9,18</Geometry>
     <Geometry x:Key="IconChevronDown">M6,9 L12,15 L18,9</Geometry>
+    <Geometry x:Key="IconWarning">M12,3.5 L21.5,20 H2.5 Z M12,9.5 V14 M12,17 H12.02</Geometry>
     <Geometry x:Key="IconInfo">M12,3 A9,9 0 1,0 21,12 A9,9 0 0,0 12,3 Z M12,11 V16.5 M12,7.5 H12.02</Geometry>
 
 </ResourceDictionary>

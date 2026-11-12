@@ -45,6 +45,24 @@ public partial class App : Application
         mainWindow.Show();
     }
 
+    /// <summary>
+    /// Windows is signing out, restarting or shutting down. WPF skips Window.Closing then, so save the tabs here; the
+    /// autosave already keeps them current, this catches the last second.
+    /// </summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        try
+        {
+            (MainWindow as MainWindow)?.SaveWindowAndSession();
+        }
+        catch (Exception ex)
+        {
+            _serviceProvider?.GetService<StructuredLogger>()?.Error("App", "Could not save the session while Windows was ending it.", ex);
+        }
+
+        base.OnSessionEnding(e);
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         _serviceProvider?.Dispose();
