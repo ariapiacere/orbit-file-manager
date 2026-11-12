@@ -281,37 +281,30 @@ public sealed class UpdateService
     }
 
     /// <summary>
-    /// Starts a hidden script that waits for this process to exit, copies the staged build over the install folder
-    /// (keeping Data, Logs and Cache) and starts Orbit again. The caller must close Orbit right after this.
+    /// Starts a hidden script that waits for this process to exit, installs the staged build and starts Orbit again.
+    /// The caller must close Orbit right after this.
+    /// <list type="bullet">
+    /// <item>Single-file package (1.2.0+: the folder holds only OrbitFileManager.exe): the running exe is replaced,
+    /// under whatever name it was started.</item>
+    /// <item>Folder package (up to 1.1.x): the files are copied over the install folder, keeping Data, Logs and Cache.</item>
+    /// </list>
     /// </summary>
     public void StartInstallAfterExit(string stagedAppDir, Version version)
     {
-        string installDir = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
-        string exePath = Path.Combine(installDir, "OrbitFileManager.exe");
+        bool singleFile = IsSingleFilePackage(stagedAppDir);
+        string installDir = Path.TrimEndingDirectorySeparator(InstallLayoutService.InstallDirectory);
+        var plan = new InstallScriptPlan(
+            StagedAppDir: Path.TrimEndingDirectorySeparator(stagedAppDir),
+            InstallDir: installDir,
+            ExePath: singleFile ? InstallLayoutService.ExecutablePath : Path.Combine(installDir, InstallLayoutService.ExecutableName),
+            WaitForProcessId: Environment.ProcessId,
+            Version: Format(version),
+            ResultFilePath: ResultFilePath,
+            LogFilePath: InstallLogPath);
+
         string scriptPath = Path.Combine(UpdateRoot, "apply-update.cmd");
-        string v = Format(version);
-
-        // cmd expands %; double it in paths. chcp 65001 lets the UTF-8 script carry non-ASCII paths.
-        static string Q(string path) => path.Replace("%", "%%");
-        string script = $"""
-            @echo off
-            chcp 65001 >NUL
-            rem Orbit File Manager updater: wait for Orbit to exit, copy the new build over it, start it again.
-            set tries=0
-            :wait
-            tasklist /FI "PID eq {Environment.ProcessId}" 2>NUL | find /I "OrbitFileManager.exe" >NUL || goto copy
-            set /a tries+=1
-            if %tries% GEQ 60 goto copy
-            ping -n 2 127.0.0.1 >NUL
-            goto wait
-            :copy
-            robocopy "{Q(stagedAppDir)}" "{Q(installDir)}" /E /R:5 /W:1 /XD Data Logs Cache /NFL /NDL /NP > "{Q(InstallLogPath)}"
-            if %ERRORLEVEL% GEQ 8 (echo failed %ERRORLEVEL% {v}> "{Q(ResultFilePath)}") else (echo ok {v}> "{Q(ResultFilePath)}")
-            start "" "{Q(exePath)}"
-            """;
-
         Directory.CreateDirectory(UpdateRoot);
-        File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.WriteAllText(scriptPath, BuildInstallScript(plan, singleFile), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
         Process.Start(new ProcessStartInfo
         {
@@ -323,7 +316,90 @@ public sealed class UpdateService
             WindowStyle = ProcessWindowStyle.Hidden
         });
 
-        _logger.Info("Update", "Started update install.", new { version = v, installDir });
+        _logger.Info("Update", "Started update install.", new { version = plan.Version, installDir, exe = plan.ExePath, singleFile });
+    }
+
+    /// <summary>True when the staged update is the single-file build: one OrbitFileManager.exe and nothing else.</summary>
+    public static bool IsSingleFilePackage(string stagedAppDir)
+    {
+        string[] entries = Directory.GetFileSystemEntries(stagedAppDir);
+        return entries.Length == 1
+            && string.Equals(Path.GetFileName(entries[0]), InstallLayoutService.ExecutableName, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(entries[0]);
+    }
+
+    /// <summary>What the install script does; <see cref="Relaunch"/> is off only in tests.</summary>
+    public sealed record InstallScriptPlan(
+        string StagedAppDir,
+        string InstallDir,
+        string ExePath,
+        int WaitForProcessId,
+        string Version,
+        string ResultFilePath,
+        string LogFilePath,
+        bool Relaunch = true);
+
+    /// <summary>
+    /// The cmd script that installs an update once Orbit (<see cref="InstallScriptPlan.WaitForProcessId"/>) has
+    /// exited. It writes "ok {version}" or "failed … {version}" to the result file, read on the next start.
+    /// </summary>
+    public static string BuildInstallScript(InstallScriptPlan plan, bool singleFile)
+    {
+        // cmd expands %; double it in paths. chcp 65001 lets the UTF-8 script carry non-ASCII paths.
+        static string Q(string path) => path.Replace("%", "%%");
+        string pid = plan.WaitForProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string v = plan.Version;
+        string result = Q(plan.ResultFilePath);
+        string log = Q(plan.LogFilePath);
+        string exe = Q(plan.ExePath);
+
+        // Wait on the process id, not the image name: the exe may have been renamed. The PID column is padded
+        // with spaces, so " {pid} " cannot match the memory column ("1,234 K").
+        string wait = $"""
+            @echo off
+            chcp 65001 >NUL
+            rem Orbit File Manager updater: wait for Orbit to exit, install the new build, start it again.
+            set tries=0
+            :wait
+            tasklist /FI "PID eq {pid}" /NH 2>NUL | find " {pid} " >NUL || goto install
+            set /a tries+=1
+            if %tries% GEQ 60 goto install
+            ping -n 2 127.0.0.1 >NUL
+            goto wait
+            :install
+
+            """;
+
+        string install = singleFile
+            ? $"""
+                rem Copy next to the exe first, then swap it in with a rename, so a failed copy never leaves a broken exe.
+                echo Replacing "{exe}" > "{log}"
+                set copytries=0
+                :copyexe
+                copy /Y /B "{Q(plan.StagedAppDir)}\{InstallLayoutService.ExecutableName}" "{exe}.new" >> "{log}" 2>&1 || goto retry
+                move /Y "{exe}.new" "{exe}" >> "{log}" 2>&1 && goto copied
+                :retry
+                set /a copytries+=1
+                if %copytries% GEQ 15 goto copyfailed
+                ping -n 2 127.0.0.1 >NUL
+                goto copyexe
+                :copyfailed
+                del /F /Q "{exe}.new" >NUL 2>&1
+                echo failed copy {v}> "{result}"
+                goto launch
+                :copied
+                echo ok {v}> "{result}"
+                :launch
+
+                """
+            : $"""
+                robocopy "{Q(plan.StagedAppDir)}" "{Q(plan.InstallDir)}" /E /R:5 /W:1 /XD Data Logs Cache /NFL /NDL /NP > "{log}"
+                if %ERRORLEVEL% GEQ 8 (echo failed %ERRORLEVEL% {v}> "{result}") else (echo ok {v}> "{result}")
+
+                """;
+
+        string launch = plan.Relaunch ? $"start \"\" \"{exe}\"\r\n" : string.Empty;
+        return (wait + install + launch).ReplaceLineEndings("\r\n");
     }
 
     /// <summary>

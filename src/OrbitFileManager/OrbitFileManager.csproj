@@ -12,9 +12,24 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
+  <!--
+    Release builds ship as ONE self-contained OrbitFileManager.exe (tools/release.ps1 publishes with
+    -p:PublishSingleFile=true). WPF's native libraries go inside it and are extracted to %TEMP%\.net on first start;
+    the PDB is embedded so logged stack traces keep line numbers. Compression is off on purpose: measured, it halves
+    the exe (155 → 69 MB) but the release zip stays 63 MB either way, and it costs ~120 ms per start and ~100 MB RAM.
+  -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Window title-bar icon; generated from the logo shapes in Resources/Icons.xaml -->
     <Resource Include="Resources\OrbitFileManager.ico" />
+    <!-- Files of the old folder install, removed after an update to the single-file build (InstallLayoutService) -->
+    <EmbeddedResource Include="Services\Updates\LegacyFolderFiles.txt" LogicalName="OrbitFileManager.Services.Updates.LegacyFolderFiles.txt" />
   </ItemGroup>
 
   <ItemGroup>

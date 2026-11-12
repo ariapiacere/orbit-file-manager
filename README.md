@@ -18,6 +18,8 @@
 
 ### Portable Directory Structure
 
+Since 1.2.0 Orbit is **one self-contained `OrbitFileManager.exe`** (about 155 MB). It runs on any Windows 10/11 x64 PC without installing .NET. Put it in a folder of its own: on first start it creates `Data`, `Logs` and `Cache` next to itself. (WPF's native libraries, about 8 MB, are unpacked once to `%TEMP%\.net\OrbitFileManager`.)
+
 When `OrbitFileManager.exe` runs in a writable folder, all state stays self-contained alongside the executable (if launched from a read-only folder such as `Program Files`, it automatically falls back to `%LOCALAPPDATA%\OrbitFileManager`):
 
 ```text
@@ -25,7 +27,8 @@ OrbitFileManager/
 ├── OrbitFileManager.exe
 ├── Data/
 │   ├── settings.json         # Theme, columns, toolbar customization, window bounds
-│   ├── sessions.json         # Single/Dual-pane state, tabs, pins, locks, custom labels
+│   ├── sessions.json         # Open tabs (folder, pin/lock, label, view, sort, selection, history), panes. Saved continuously
+│   ├── sessions.json.bak     # The previous save; used automatically if sessions.json is damaged
 │   ├── workspaces.json       # Named multi-pane workspace presets
 │   ├── favorites.json        # User pinned favorite folders
 │   ├── item_metadata.json    # Per-file/folder color tags & custom notes
@@ -35,6 +38,12 @@ OrbitFileManager/
 │   └── orbit-YYYYMMDD.jsonl  # Structured JSON Lines diagnostic logs
 └── Cache/                    # Runtime cache directory
 ```
+
+### Tabs survive crashes and restarts
+
+Open tabs are saved about a second after any change (opening, closing, moving or pinning a tab, changing folder, view or sort) and every 10 seconds, not only when Orbit closes. A crash, *End task*, a forced kill or a Windows restart loses at most the last second. Each save is atomic: it is written to `sessions.json.tmp`, flushed to disk, then swapped in, and the file it replaces is kept as `sessions.json.bak`. A damaged `sessions.json` (for example after a power cut) is renamed to `sessions.json.corrupt-<time>` and the tabs come back from the backup.
+
+On start every saved tab comes back, including tabs whose folder is gone or offline (a deleted folder, a NAS or mapped drive that is not connected yet). Those tabs show a warning icon and a banner with **Retry** and **Open nearest folder**. Folders load in the background, so a slow or offline network path never holds up startup.
 
 ---
 
@@ -54,11 +63,14 @@ dotnet test OrbitFileManager.sln
 # 3. Launch in development mode
 dotnet run --project src/OrbitFileManager/OrbitFileManager.csproj
 
-# 4. Publish self-contained portable Windows x64 build
+# 4. Publish the single self-contained OrbitFileManager.exe (what releases ship)
 dotnet publish src/OrbitFileManager/OrbitFileManager.csproj `
-  -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false `
+  -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true `
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded `
   -o publish/OrbitFileManager
 ```
+
+Compression (`-p:EnableCompressionInSingleFile=true`) is deliberately off: it shrinks the exe from 155 to 69 MB, but the release zip is 63 MB either way, and it adds about 120 ms to every start and about 100 MB of memory.
 
 ---
 
@@ -123,6 +135,7 @@ Use a disposable test folder (never test destructive operations on production da
    - Move a folder from `C:\TempTest` to a secondary/USB drive `D:\TempTest` and verify source removal occurs only after complete destination verification.
 3. **Network Shares & Disconnection Handling**:
    - Enter a UNC path (`\\server\share`) in the Address Bar (`Ctrl+L`). Verify inaccessible or disconnected shares show a non-crashing inline error banner while keeping all tabs responsive.
+   - Open tabs on a NAS share, then end Orbit from Task Manager and restart it with the NAS unplugged: the tabs come back marked unavailable, startup is not delayed, and **Retry** opens them once the NAS is back.
 4. **Permission & Locked File Errors**:
    - Navigate into a restricted OS folder (e.g. `C:\System Volume Information`) or attempt to rename a file held open exclusively by another process; confirm Orbit logs the warning and displays a clean error message without crashing.
 5. **External File Modifications (`FileSystemWatcher`)**:
@@ -142,7 +155,9 @@ Use a disposable test folder (never test destructive operations on production da
 
 Orbit checks this repository's [GitHub Releases](https://github.com/ariapiacere/orbit-file-manager/releases) a few seconds after it starts. When a newer version exists, an **Update to x.y.z** button appears at the right of the status bar. You can also use **Tools → Check for Updates...**.
 
-The update window shows the release notes, downloads the portable zip, checks its SHA-256, closes Orbit, copies the new files over the old ones (your `Data`, `Logs` and `Cache` folders are kept) and starts Orbit again. The automatic check can be turned off in **Settings → Updates**.
+The update window shows the release notes, downloads the zip, checks its SHA-256, closes Orbit, replaces `OrbitFileManager.exe` (under whatever name it was started) and starts Orbit again. `Data`, `Logs` and `Cache` are never touched. The new exe is copied next to the old one first and swapped in by a rename, retried for about 15 seconds if something holds the old exe, so a failed update leaves the old version working. The automatic check can be turned off in **Settings → Updates**.
+
+Installs from 1.1.x and earlier are a folder of about 470 files. Their updater copies the new exe over the old one; on its first start the new exe removes the old files. It deletes only the exact names that 1.0.x–1.1.x shipped, and only in a folder that still holds `OrbitFileManager.dll`.
 
 Orbit can only update itself when it runs from a folder it can write to (the portable layout). A copy inside `Program Files` shows a link to the release page instead.
 
@@ -161,4 +176,4 @@ git pull        # later: bring your copy up to date
 1. Bump `<Version>` in `Directory.Build.props` and commit.
 2. Run `./tools/release.ps1 -Notes "What changed"` (needs the .NET 8 SDK and a logged-in GitHub CLI).
 
-The script runs the tests, publishes the self-contained build, uploads `OrbitFileManager-win-x64-<version>.zip` and its `.sha256` as release `v<version>`, and pushes the tag. Every running copy offers the update on its next start.
+The script runs the tests, publishes the single-file exe (and stops if anything else lands next to it or its version is wrong), uploads `OrbitFileManager-win-x64-<version>.zip` (holding `OrbitFileManager\OrbitFileManager.exe`), its `.sha256` and the bare `OrbitFileManager.exe` as release `v<version>`, and pushes the tag. Every running copy offers the update on its next start. The newest exe is always at `https://github.com/ariapiacere/orbit-file-manager/releases/latest/download/OrbitFileManager.exe`.

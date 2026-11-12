@@ -1,5 +1,58 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-12 — 1.2.0: tabs survive crashes, single-file exe
+
+**Crash-safe tabs.** Before, `sessions.json` was written only in `Window_Closing`, so a crash, a forced kill or a
+Windows restart (WPF does not raise `Closing` when the session ends) lost every tab. Restore also dropped tabs whose
+folder was missing and called `Directory.Exists` on the UI thread, which stalls for many seconds on an offline share.
+- `SessionAutoSaver` (Services/Settings): `RequestSave()` debounces 750 ms; a 10 s timer catches unreported changes
+  (selection, history). The state is built on the UI thread; serialising, comparing and writing run on the thread
+  pool, and nothing is written when only `SavedAt` would change. Started at the end of `InitializeAsync`, so a
+  half-restored session is never saved. `MainViewModel` triggers it from pane `Tabs` changes, `ActiveTab`, layout
+  properties and per-tab properties (`SessionTabProperties`; tabs are re-synced on every collection change).
+- `SessionService` writes `sessions.json.tmp` with `WriteThrough` + `Flush(true)`, then `File.Replace` (main → `.bak`),
+  falling back to copy + move on volumes without ReplaceFile. Writes are numbered (`NextSequence()` on the UI thread)
+  and serialized by a lock, so an older background write never lands after a newer one or after the final save.
+  `LoadSessionWithRecovery()`: main → `.bak`; a damaged main (bad JSON, empty, NUL-filled, `null`) is renamed to
+  `sessions.json.corrupt-<time>` and never rotated into the backup. `AppSessionState.Sanitize()` repairs null panes,
+  blank tabs and bad indexes. The status bar says when tabs came from the backup or could not be restored.
+- `App.OnSessionEnding` saves window + session (`MainWindow.SaveWindowAndSession`) on sign-out, restart or shutdown.
+- `TabSessionState` gained `SelectedPath`, `BackHistory` and `ForwardHistory` (oldest first, 50 per direction).
+  Older files load unchanged. `BrowserPaneViewModel.ToSessionState` now counts the active index among the saved tabs
+  (search tabs are skipped; before, an active tab after a search tab restored the wrong tab).
+- Restore (`BrowserPaneViewModel.RestoreSessionAsync(state, fallback, waitForLoads)`): every tab is created at once
+  with `PrepareForRestore` (title, label, breadcrumbs, history; no disk I/O), then all folders load in parallel,
+  active tab first. Startup passes `waitForLoads: false`. Until its first load finishes a tab reports its saved path
+  and selection, so an autosave in the meantime loses nothing.
+- Unavailable folders: `BrowserTabViewModel.IsUnavailable` (the tab's own folder failed to load). The tab keeps the
+  path, shows a rose warning icon in its pill and a banner with **Retry** (= F5) and **Open nearest folder**
+  (`FindNearestExistingFolderAsync`, off the UI thread; a locked tab opens it in a new tab). `NewTabAsync` no longer
+  probes an unavailable tab's path, and `UpdateDriveSpaceSummary` reads `DriveInfo` off the UI thread.
+- Tests: `SessionPersistenceTests` (20 cases: atomic save + backup, round trip, old format, five kinds of damaged
+  file, missing main, both damaged, sanitising, write ordering, 40 parallel writers, autosave timing on a real
+  Dispatcher, restore of missing/offline folders, nearest folder, history and active index).
+
+**Single-file exe.** Releases now ship one self-contained `OrbitFileManager.exe` (155 MB; zip 63 MB, was 67 MB):
+`-p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=embedded`, also set in a
+`PublishSingleFile` property group in the csproj. Compression is off (measured: 69 MB exe but +120 ms start and
++100 MB RAM, zip unchanged). Warm start ~580 ms vs ~500 ms for the folder build.
+- Checked for single-file breakage: no `Assembly.Location` use; `AppContext.BaseDirectory` is the exe folder, so
+  `Data/Logs/Cache` stay beside the exe; WPF native DLLs are unpacked to `%TEMP%\.net\OrbitFileManager\<id>`.
+- Old (1.1.x) updaters download the same zip name, extract it and robocopy `OrbitFileManager\OrbitFileManager.exe`
+  over the old folder. Verified that the single exe runs there and loads nothing from the ~470 old files.
+  `InstallLayoutService.CleanUpAsync` (started from `App.OnStartup`) then deletes them: single-file build only, only
+  when `OrbitFileManager.dll` is beside the exe, only the names in `Services/Updates/LegacyFolderFiles.txt` (union of
+  the 1.1.0–1.1.8 zips, embedded), never the exe, `Data`, `Logs`, `Cache` or anything else; emptied language folders
+  go too. It also removes extraction folders of older versions unless a running Orbit still has them loaded (each is
+  renamed first, which Windows refuses while a DLL inside is loaded).
+- New updater (`UpdateService.BuildInstallScript`): a package holding only the exe is installed by copying it to
+  `<exe>.new` and renaming it over `Environment.ProcessPath` (so a renamed exe works), retried 15 times, else
+  "failed copy". Waiting uses the PID, not the image name. Folder packages still use robocopy.
+- `tools/release.ps1` publishes single-file, refuses to continue unless the publish folder holds exactly the exe with
+  the right version, and uploads the zip, `.sha256` and the bare `OrbitFileManager.exe`.
+- Tests: `SingleFileUpdateTests` (10 cases; the install scripts really run under cmd, with a Thai/`%`/`&` folder
+  name, a renamed exe, a lock that clears and one that does not, PID waiting, and the robocopy path).
+
 ## 2026-11-06 — Sorting, type-to-select, and mixed transfer replacement
 
 - Natural name sorting puts `_` before digits and letters, retaining numeric ordering and directories first.

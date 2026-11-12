@@ -43,6 +43,9 @@ public partial class App : Application
         var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
         MainWindow = mainWindow;
         mainWindow.Show();
+
+        // After an update from the old folder install, remove the files it left behind (background, best effort).
+        _ = _serviceProvider.GetRequiredService<InstallLayoutService>().CleanUpAsync();
     }
 
     /// <summary>
@@ -90,6 +93,7 @@ public partial class App : Application
         services.AddSingleton<DuplicateFinderService>();
         services.AddSingleton<FolderSizeAnalyzerService>();
         services.AddSingleton<UpdateService>();
+        services.AddSingleton<InstallLayoutService>();
         services.AddSingleton<IThemeService, ThemeService>();
         services.AddSingleton<IUserDialogService, WpfUserDialogService>();
         services.AddSingleton<MainViewModel>();
