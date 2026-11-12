@@ -53,6 +53,27 @@ folder was missing and called `Directory.Exists` on the UI thread, which stalls 
 - Tests: `SingleFileUpdateTests` (10 cases; the install scripts really run under cmd, with a Thai/`%`/`&` folder
   name, a renamed exe, a lock that clears and one that does not, PID waiting, and the robocopy path).
 
+**Verified on the released 1.2.0 (134/134 tests).** Farm01 has no machine-wide .NET and none of these runs set
+`DOTNET_ROOT`, so the exe needs no installed runtime.
+- Crash proof with the real exe (UI Automation; the RDP session is locked): seeded six tabs (pinned, locked, labels,
+  views, sort, selection, history, a deleted folder, an offline `\\192.0.2.1\...` share). The window was up in 0.7 s
+  (1.7 s on the very first start, which unpacks the native DLLs). Pressed + via UIA; the new tab was on disk about
+  0.8 s later. After `taskkill /F` and a restart the re-saved state was identical. A `sessions.json` cut in half
+  came back from `.bak`, with the status-bar message and `sessions.json.corrupt-*`.
+- In-process harness renders: warning icons on unavailable tabs, banner with Retry / Open nearest folder. The
+  offline share took 17.5 s to fail and the UI stayed responsive.
+- Update 1.1.8 to 1.2.0 through 1.1.8's own updater (the v1.1.8 zip, SHA-256 checked against GitHub): 13 s from
+  Install to restart. Afterwards only `OrbitFileManager.exe`, `Data`, `Logs` and `Cache` were left (466 files removed,
+  0 failed), "Update installed ok 1.2.0" was logged, and the tabs were kept. UIA note: the status-bar badge's
+  automation name is its tooltip, "Download and install the new version" (toolbar style); the dialog button is
+  `InstallButton`.
+- Single exe to single exe: this code built as 1.1.99 and renamed `Orbit File Manager (old).exe` updated itself to
+  the released 1.2.0 under the same name ("1 file(s) copied / 1 file(s) moved", no `.new` left, tabs kept).
+- Not tested: a real Windows restart or shutdown (`OnSessionEnding`), a mapped drive letter whose NAS is offline (the
+  UNC case is covered), and a PC with AppLocker rules that block `%TEMP%` (the single-file host unpacks the WPF
+  DLLs there; `DOTNET_BUNDLE_EXTRACT_BASE_DIR` can move that). Left alone: the sidebar's drive list still asks
+  each drive `IsReady` on the UI thread at startup, so a dead mapped drive can still slow startup there.
+
 ## 2026-11-06 — Sorting, type-to-select, and mixed transfer replacement
 
 - Natural name sorting puts `_` before digits and letters, retaining numeric ordering and directories first.
