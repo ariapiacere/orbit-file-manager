@@ -1,6 +1,6 @@
 # Orbit File Manager
 
-**Orbit File Manager** is a modern, native Windows 10/11 x64 desktop File Explorer alternative built with **C#**, **WPF / XAML**, and **MVVM** (`CommunityToolkit.Mvvm`), inspired functionally by XYplorer with an original Fluent-inspired Slate Dark & Daylight Light visual design.
+**Orbit File Manager** is a modern, native Windows 10/11 x64 desktop File Explorer alternative built with **C#**, **WPF / XAML**, and **MVVM** (`CommunityToolkit.Mvvm`), with an original Fluent-inspired Slate Dark & Daylight Light visual design.
 
 ---
 

@@ -203,7 +203,7 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
 
 ## 1. Project Overview & Current State
 
-**Orbit File Manager** is a native Windows 10/11 x64 desktop File Explorer alternative inspired functionally by XYplorer, built with **C#**, **WPF / XAML**, and **MVVM** (`CommunityToolkit.Mvvm` 8.3.2 + `Microsoft.Extensions.DependencyInjection` 8.0.1).
+**Orbit File Manager** is a native Windows 10/11 x64 desktop File Explorer alternative built with **C#**, **WPF / XAML**, and **MVVM** (`CommunityToolkit.Mvvm` 8.3.2 + `Microsoft.Extensions.DependencyInjection` 8.0.1).
 
 - **Target Framework**: Centralized in `Directory.Build.props` via `<OrbitTargetFramework>net8.0-windows</OrbitTargetFramework>` (matching the host machine's installed **.NET SDK 8.0.425**; switchable in 1 line to `net10.0-windows` if .NET 10 SDK is installed).
 - **Automated Tests**: **47/47 xUnit tests passing** (`dotnet test OrbitFileManager.sln`). All tests run in isolated `%TEMP%` subdirectories and clean up in `Dispose()`.
@@ -345,7 +345,7 @@ OrbitFileManager/
 After fixing the `CancellationTokenSource` lifecycle issue above, high-value UX/feature improvements include:
 
 1. **Remember Parent Selection on `Up` / `Back` Navigation**:
-   - When navigating *up* (`Alt+Up` / `Backspace`) from `C:\Users\<you>\.claude` to `C:\Users\<you>`, pass `selectPathAfterLoad: previousChildPath` so `.claude` is automatically highlighted (XYplorer behavior), while keeping horizontal scroll pinned at `0` (Left).
+   - When navigating *up* (`Alt+Up` / `Backspace`) from `C:\Users\<you>\.claude` to `C:\Users\<you>`, pass `selectPathAfterLoad: previousChildPath` so `.claude` is automatically highlighted, while keeping horizontal scroll pinned at `0` (Left).
 2. **Persist Custom Column Widths & Dual-Pane Splitter Ratio**:
    - Save user-resized `GridViewColumn` widths (`Name`, `Ext`, `Size`, `Type`, `Modified`, `Created`, `Attr`) in `AppSettings` and `LeftPane` / `RightPane` splitter star ratios in `AppSessionState`.
 3. **Inline Rename (`F2`) in File List**:
