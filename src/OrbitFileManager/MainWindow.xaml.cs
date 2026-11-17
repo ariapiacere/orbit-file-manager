@@ -425,8 +425,8 @@ public partial class MainWindow : Window
                     e.Handled = true;
                     return;
                 case Key.C:
-                    _viewModel.CopyFullPath();
-                    e.Handled = true;
+                    e.Handled = true; // before the await, or the key keeps routing
+                    await _viewModel.CopyFullPathAsync();
                     return;
             }
         }
@@ -471,17 +471,18 @@ public partial class MainWindow : Window
         {
             switch (key)
             {
+                // Handled is set before the await: once the handler yields, the key has already routed on.
                 case Key.C:
-                    _viewModel.CopySelected();
                     e.Handled = true;
+                    await _viewModel.CopySelectedAsync();
                     return;
                 case Key.X:
-                    _viewModel.CutSelected();
                     e.Handled = true;
+                    await _viewModel.CutSelectedAsync();
                     return;
                 case Key.V:
-                    await _viewModel.PasteAsync();
                     e.Handled = true;
+                    await _viewModel.PasteAsync();
                     return;
                 case Key.A:
                     _viewModel.SelectAll();

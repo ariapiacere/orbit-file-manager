@@ -21,6 +21,13 @@ public enum JobStatus
     Cancelled = 5
 }
 
+public enum JobItemOutcome
+{
+    Done = 0,
+    Skipped = 1,
+    Failed = 2
+}
+
 public partial class FileOperationJob : ObservableObject
 {
     private readonly ManualResetEventSlim _pauseGate = new(initialState: true);
@@ -68,6 +75,61 @@ public partial class FileOperationJob : ObservableObject
     /// <summary>Top-level items this job wrote into <see cref="DestinationDirectory"/>, so they can be selected there.</summary>
     public List<string> CreatedPaths { get; } = [];
 
+    private const int ToolTipItemLimit = 30;
+    private readonly Dictionary<string, (JobItemOutcome Outcome, string? Target)> _outcomes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Records what happened to one source item. Called on the UI thread (or inline without one).</summary>
+    public void RecordItem(string sourcePath, JobItemOutcome outcome, string? targetPath = null)
+    {
+        _outcomes[sourcePath] = (outcome, targetPath);
+        if (outcome == JobItemOutcome.Done && targetPath is not null)
+            CreatedPaths.Add(targetPath);
+        OnPropertyChanged(nameof(ItemsToolTip));
+    }
+
+    /// <summary>Hover text for the queue row: where from, where to, and every item with what happened to it.</summary>
+    public string ItemsToolTip
+    {
+        get
+        {
+            var sb = new System.Text.StringBuilder();
+            string verb = IsMove ? "Move" : "Copy";
+            var parents = SourcePaths.Select(p => Path.GetDirectoryName(p.TrimEnd(Path.DirectorySeparatorChar)) ?? string.Empty)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            bool oneFolder = parents.Count == 1;
+
+            sb.AppendLine($"{verb} {SourcePaths.Count:N0} item{(SourcePaths.Count == 1 ? "" : "s")}");
+            sb.AppendLine(oneFolder ? $"From: {parents[0]}" : "From: several folders");
+            sb.AppendLine($"To: {DestinationDirectory}");
+            sb.AppendLine();
+
+            foreach (string source in SourcePaths.Take(ToolTipItemLimit))
+            {
+                string name = oneFolder ? Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)) : source;
+                if (!_outcomes.TryGetValue(source, out var result))
+                {
+                    sb.AppendLine(IsActive ? $"{name}  (waiting)" : $"{name}  (not done)");
+                    continue;
+                }
+
+                string? targetName = result.Target is null ? null : Path.GetFileName(result.Target);
+                sb.AppendLine(result.Outcome switch
+                {
+                    JobItemOutcome.Done when targetName is not null &&
+                        !string.Equals(targetName, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)), StringComparison.OrdinalIgnoreCase)
+                        => $"{name}  →  {targetName}",
+                    JobItemOutcome.Done => name,
+                    JobItemOutcome.Skipped => $"{name}  (skipped)",
+                    _ => $"{name}  (failed)"
+                });
+            }
+
+            if (SourcePaths.Count > ToolTipItemLimit)
+                sb.AppendLine($"…and {SourcePaths.Count - ToolTipItemLimit:N0} more");
+            return sb.ToString().TrimEnd();
+        }
+    }
+
     public CancellationToken CancellationToken => _cts.Token;
     public bool IsActive => Status is JobStatus.Queued or JobStatus.Running or JobStatus.Paused;
     public bool CanPauseResume => Status is JobStatus.Running or JobStatus.Paused;
@@ -75,6 +137,7 @@ public partial class FileOperationJob : ObservableObject
 
     partial void OnStatusChanged(JobStatus value)
     {
+        OnPropertyChanged(nameof(ItemsToolTip)); // "waiting" becomes "not done" once the job stops
         OnPropertyChanged(nameof(IsActive));
         OnPropertyChanged(nameof(CanPauseResume));
         OnPropertyChanged(nameof(PauseResumeLabel));
@@ -292,6 +355,7 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                 if (!isDir && !isFile)
                 {
                     job.Errors.Add($"Source not found: '{sourcePath}'");
+                    UpdateJob(job, () => job.RecordItem(rawSource, JobItemOutcome.Failed));
                     continue;
                 }
 
@@ -300,7 +364,10 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                 bool sameFolder = srcParent is not null && PathValidator.PathsEqual(srcParent, job.DestinationDirectory);
 
                 if (sameFolder && job.IsMove)
+                {
+                    UpdateJob(job, () => job.RecordItem(rawSource, JobItemOutcome.Skipped));
                     continue;
+                }
 
                 string targetPath;
                 bool overwrite = false;
@@ -316,6 +383,7 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                     if (isDir && PathValidator.IsSameOrSubPath(sourcePath, targetPath))
                     {
                         job.Errors.Add($"Cannot {(job.IsMove ? "move" : "copy")} '{itemName}' into itself or its subfolder.");
+                        UpdateJob(job, () => job.RecordItem(rawSource, JobItemOutcome.Failed));
                         continue;
                     }
 
@@ -343,7 +411,10 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                             throw new OperationCanceledException();
 
                         if (res == ConflictResolution.Skip)
+                        {
+                            UpdateJob(job, () => job.RecordItem(rawSource, JobItemOutcome.Skipped));
                             continue;
+                        }
 
                         if (res == ConflictResolution.KeepBoth)
                             targetPath = PathValidator.GenerateUniqueDestinationPath(job.DestinationDirectory, itemName, isDir, useCopyLabel: false);
@@ -386,7 +457,8 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                             });
                     }
 
-                    job.CreatedPaths.Add(targetPath);
+                    string created = targetPath;
+                    UpdateJob(job, () => job.RecordItem(rawSource, JobItemOutcome.Done, created));
                 }
                 catch (OperationCanceledException)
                 {
@@ -396,6 +468,7 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                 {
                     _logger.Error("Queue", $"Error transferring '{sourcePath}'.", ex);
                     job.Errors.Add($"'{itemName}': {ex.Message}");
+                    UpdateJob(job, () => job.RecordItem(rawSource, JobItemOutcome.Failed));
                 }
             }
 

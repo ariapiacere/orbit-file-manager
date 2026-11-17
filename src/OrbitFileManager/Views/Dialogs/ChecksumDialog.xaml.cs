@@ -155,7 +155,7 @@ public partial class ChecksumDialog : Window
         }
     }
 
-    private void CopyHash_Click(object sender, RoutedEventArgs e)
+    private async void CopyHash_Click(object sender, RoutedEventArgs e)
     {
         if (_activeResult is null || sender is not Button btn || btn.Tag is not string kind)
             return;
@@ -171,12 +171,13 @@ public partial class ChecksumDialog : Window
 
         if (!string.IsNullOrEmpty(val))
         {
-            Clipboard.SetText(val);
-            StatusBadgeText.Text = $"Copied {kind} to clipboard";
+            StatusBadgeText.Text = await ClipboardAccess.TryRunAsync(() => Clipboard.SetText(val))
+                ? $"Copied {kind} to clipboard"
+                : "Clipboard busy, try again";
         }
     }
 
-    private void CopyReport_Click(object sender, RoutedEventArgs e)
+    private async void CopyReport_Click(object sender, RoutedEventArgs e)
     {
         if (_activeResult is null)
             return;
@@ -190,8 +191,10 @@ public partial class ChecksumDialog : Window
         sb.AppendLine($"SHA-256: {_activeResult.Sha256}");
         sb.AppendLine($"SHA-512: {_activeResult.Sha512}");
 
-        Clipboard.SetText(sb.ToString());
-        StatusBadgeText.Text = "Copied full checksum report";
+        string report = sb.ToString();
+        StatusBadgeText.Text = await ClipboardAccess.TryRunAsync(() => Clipboard.SetText(report))
+            ? "Copied full checksum report"
+            : "Clipboard busy, try again";
     }
 
     private void CancelCalc_Click(object sender, RoutedEventArgs e)

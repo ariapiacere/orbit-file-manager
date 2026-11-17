@@ -1,5 +1,42 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-17 (later) — Busy clipboard no longer crashes Ctrl+C; queue rows list their files
+
+**Clipboard.** Ctrl+C showed "An unexpected error occurred: OpenClipboard Failed (0x800401D0 CLIPBRD_E_CANT_OPEN)".
+- Cause: only one program can have the clipboard open. Clipboard history, RDP clipboard sync and clipboard managers
+  open it right after each change. WPF's `SetDataObject(copy: true)` retries `OleSetClipboard` for 1 s and
+  `OleFlushClipboard` for only about 0.1 s, then throws, and the exception reached `App.DispatcherUnhandledException`.
+- `Utilities/ClipboardAccess`: every clipboard call goes through `TryRunAsync` / `TryGetAsync`:
+  - Checks `IsFreeNow()` first and waits asynchronously, about 2.5 s in all, so WPF's own sleeping retry loop never
+    freezes the window. Measured longest UI pause while waiting: 47 ms.
+  - Gives up with a status-bar message (`BusyMessage`) instead of the dialog. Other errors still throw.
+  - Callers: Copy, Cut, Paste (incl. the clear after a cut-paste), Copy Full Path / Filename / Relative Path, and
+    the Checksum dialog.
+  - `FileOperationService.SetClipboardFilesAsync` / `GetClipboardFilesAsync` replace the sync versions.
+  - Commands are now `CopySelectedAsync`, `CutSelectedAsync`, `CopyFullPathAsync` and so on; the generated command
+    names are unchanged.
+  - `MainWindow` sets `e.Handled` before awaiting Ctrl+C/X/V and Ctrl+Shift+C.
+- `IsFreeNow` must open the clipboard with a real window (a hidden `HWND_MESSAGE` `HwndSource`). Measured:
+  opened with no window, `OpenClipboard(NULL)` can succeed while another process holds the clipboard the same way,
+  and the following `CloseClipboard` ends that process's open.
+- Tests: `ClipboardAndQueueTooltipTests` (retry, give-up after 2–3 s, no WPF call while held, other errors
+  surface).
+- The UI harness `clipboard` mode has a separate PowerShell process hold the clipboard:
+  - 5 s hold: a message after 2.5 s, no dialog, UI responsive.
+  - A plain WPF call fails with the user's exact error.
+  - Ctrl+C with a 1.5 s hold and Ctrl+V with a 1 s hold both succeed once the clipboard frees.
+
+**Queue row hover.** Hovering a job in the File Operation Queue shows `FileOperationJob.ItemsToolTip`:
+- Copy/Move and the item count, the source folder ("several folders" when mixed) and the destination.
+- Every item, with "→ new name" for a renamed copy (Keep both, same-folder copy), "(skipped)", "(failed)",
+  "(waiting)" or "(not done)". At most 30 lines, then "…and N more".
+- The queue records each outcome with `RecordItem(source, JobItemOutcome, target)` on the UI thread;
+  `CreatedPaths` is now filled from it.
+
+Known: `SingleFileUpdateTests.FolderScript_CopiesTheBuildAndKeepsUserData` failed twice (once in the full suite,
+once in its class) and then passed 12 times in a row; the error message was not captured. It tests the 1.2.0
+robocopy install script, which this change does not touch. If `release.ps1` stops on it, rerun.
+
 ## 2026-11-17 — New Folder no longer scrolls Details sideways; copied items stay selected
 
 **Sideways jump.** After New Folder, a copy or any reload, the Details list could jump almost to its right end, so

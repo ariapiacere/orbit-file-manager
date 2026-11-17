@@ -498,26 +498,37 @@ public sealed class FileOperationService
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
 
-    public void SetClipboardFiles(IReadOnlyList<string> paths, bool isCut)
+    /// <summary>Puts files on the clipboard for Copy/Cut. False when another program kept the clipboard busy.</summary>
+    public Task<bool> SetClipboardFilesAsync(IReadOnlyList<string> paths, bool isCut)
     {
         if (paths.Count == 0)
-            return;
+            return Task.FromResult(true);
 
-        var dropList = new StringCollection();
-        foreach (string p in paths)
-            dropList.Add(p);
+        return ClipboardAccess.TryRunAsync(() =>
+        {
+            var dropList = new StringCollection();
+            foreach (string p in paths)
+                dropList.Add(p);
 
-        var dataObject = new DataObject();
-        dataObject.SetFileDropList(dropList);
+            var dataObject = new DataObject();
+            dataObject.SetFileDropList(dropList);
 
-        // Windows Shell Preferred DropEffect: 2 = DROPEFFECT_MOVE, 5 = DROPEFFECT_COPY | DROPEFFECT_LINK
-        byte[] moveEffect = isCut ? [2, 0, 0, 0] : [5, 0, 0, 0];
-        dataObject.SetData("Preferred DropEffect", new MemoryStream(moveEffect));
+            // Windows Shell Preferred DropEffect: 2 = DROPEFFECT_MOVE, 5 = DROPEFFECT_COPY | DROPEFFECT_LINK
+            byte[] moveEffect = isCut ? [2, 0, 0, 0] : [5, 0, 0, 0];
+            dataObject.SetData("Preferred DropEffect", new MemoryStream(moveEffect));
 
-        Clipboard.SetDataObject(dataObject, copy: true);
+            Clipboard.SetDataObject(dataObject, copy: true);
+        });
     }
 
-    public (IReadOnlyList<string> Paths, bool IsCut) GetClipboardFiles()
+    /// <summary>Files on the clipboard for Paste. <c>Busy</c> is true when another program kept the clipboard busy.</summary>
+    public async Task<(IReadOnlyList<string> Paths, bool IsCut, bool Busy)> GetClipboardFilesAsync()
+    {
+        var (ok, value) = await ClipboardAccess.TryGetAsync(ReadClipboardFiles);
+        return ok ? (value.Paths, value.IsCut, false) : ([], false, true);
+    }
+
+    private static (IReadOnlyList<string> Paths, bool IsCut) ReadClipboardFiles()
     {
         try
         {
@@ -552,7 +563,7 @@ public sealed class FileOperationService
 
             return (paths, isCut);
         }
-        catch
+        catch (Exception ex) when (!ClipboardAccess.IsBusy(ex))
         {
             return ([], false);
         }

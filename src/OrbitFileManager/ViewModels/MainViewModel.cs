@@ -1394,26 +1394,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void CopySelected()
+    public async Task CopySelectedAsync()
     {
         if (ActiveTab is null || ActiveTab.SelectedItems.Count == 0)
             return;
 
         var paths = ActiveTab.SelectedItems.Select(i => i.FullPath).ToList();
-        _fileOperationService.SetClipboardFiles(paths, isCut: false);
+        if (!await _fileOperationService.SetClipboardFilesAsync(paths, isCut: false))
+        {
+            StatusMessage = $"Nothing copied. {ClipboardAccess.BusyMessage}";
+            return;
+        }
+
         _activeCutPaths = null;
         UpdateCutVisualsAcrossTabs();
         StatusMessage = $"Copied {paths.Count:N0} item{(paths.Count == 1 ? "" : "s")} to clipboard.";
     }
 
     [RelayCommand]
-    public void CutSelected()
+    public async Task CutSelectedAsync()
     {
         if (ActiveTab is null || ActiveTab.SelectedItems.Count == 0)
             return;
 
         var paths = ActiveTab.SelectedItems.Select(i => i.FullPath).ToList();
-        _fileOperationService.SetClipboardFiles(paths, isCut: true);
+        if (!await _fileOperationService.SetClipboardFilesAsync(paths, isCut: true))
+        {
+            StatusMessage = $"Nothing cut. {ClipboardAccess.BusyMessage}";
+            return;
+        }
+
         _activeCutPaths = new HashSet<string>(paths, StringComparer.OrdinalIgnoreCase);
         UpdateCutVisualsAcrossTabs();
         StatusMessage = $"Cut {paths.Count:N0} item{(paths.Count == 1 ? "" : "s")} — press Ctrl+V in destination.";
@@ -1425,21 +1435,36 @@ public partial class MainViewModel : ObservableObject, IDisposable
         if (ActiveTab is null || ActiveTab.IsSearchTab || string.IsNullOrWhiteSpace(ActiveTab.CurrentPath))
             return;
 
-        var (paths, isCut) = _fileOperationService.GetClipboardFiles();
+        string destination = ActiveTab.CurrentPath;
+        var (paths, isCut, busy) = await _fileOperationService.GetClipboardFilesAsync();
+        if (busy)
+        {
+            StatusMessage = $"Nothing pasted. {ClipboardAccess.BusyMessage}";
+            return;
+        }
+
         if (paths.Count == 0)
         {
             StatusMessage = "Clipboard does not contain any files or folders.";
             return;
         }
 
-        await EnqueueOrRunTransferAsync(paths, ActiveTab.CurrentPath, isMove: isCut);
+        await EnqueueOrRunTransferAsync(paths, destination, isMove: isCut);
 
         if (isCut)
         {
-            Clipboard.Clear();
+            // Best effort: a busy clipboard only means the cut files stay listed there.
+            await ClipboardAccess.TryRunAsync(Clipboard.Clear);
             _activeCutPaths = null;
             UpdateCutVisualsAcrossTabs();
         }
+    }
+
+    private async Task CopyTextAsync(string text, string doneMessage)
+    {
+        StatusMessage = await ClipboardAccess.TryRunAsync(() => Clipboard.SetText(text))
+            ? doneMessage
+            : $"Nothing copied. {ClipboardAccess.BusyMessage}";
     }
 
     public async Task EnqueueOrRunTransferAsync(IReadOnlyList<string> sourcePaths, string destinationPath, bool isMove)
@@ -1630,7 +1655,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     // ─── Path Copy Helpers ─────────────────────────────────────────────────────
 
     [RelayCommand]
-    public void CopyFullPath()
+    public async Task CopyFullPathAsync()
     {
         if (ActiveTab is null)
             return;
@@ -1640,25 +1665,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
             : ActiveTab.CurrentPath;
 
         if (!string.IsNullOrEmpty(text))
-        {
-            Clipboard.SetText(text);
-            StatusMessage = "Copied full path(s) to clipboard.";
-        }
+            await CopyTextAsync(text, "Copied full path(s) to clipboard.");
     }
 
     [RelayCommand]
-    public void CopyFileName()
+    public async Task CopyFileNameAsync()
     {
         if (ActiveTab is null || ActiveTab.SelectedItems.Count == 0)
             return;
 
         string text = string.Join(Environment.NewLine, ActiveTab.SelectedItems.Select(i => i.Name));
-        Clipboard.SetText(text);
-        StatusMessage = $"Copied {ActiveTab.SelectedItems.Count:N0} filename(s) to clipboard.";
+        await CopyTextAsync(text, $"Copied {ActiveTab.SelectedItems.Count:N0} filename(s) to clipboard.");
     }
 
     [RelayCommand]
-    public void CopyRelativePath()
+    public async Task CopyRelativePathAsync()
     {
         if (ActiveTab is null || ActiveTab.SelectedItems.Count == 0 || string.IsNullOrEmpty(ActiveTab.CurrentPath))
             return;
@@ -1668,8 +1689,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             Environment.NewLine,
             ActiveTab.SelectedItems.Select(i => Path.GetRelativePath(baseDir, i.FullPath)));
 
-        Clipboard.SetText(text);
-        StatusMessage = "Copied relative path(s) to clipboard.";
+        await CopyTextAsync(text, "Copied relative path(s) to clipboard.");
     }
 
     // ─── View Modes, Panels & Settings ─────────────────────────────────────────
