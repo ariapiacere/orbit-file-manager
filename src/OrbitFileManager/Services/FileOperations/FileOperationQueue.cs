@@ -65,6 +65,9 @@ public partial class FileOperationJob : ObservableObject
     public List<string> Errors { get; } = [];
     public string ErrorDetails => string.Join(Environment.NewLine, Errors);
 
+    /// <summary>Top-level items this job wrote into <see cref="DestinationDirectory"/>, so they can be selected there.</summary>
+    public List<string> CreatedPaths { get; } = [];
+
     public CancellationToken CancellationToken => _cts.Token;
     public bool IsActive => Status is JobStatus.Queued or JobStatus.Running or JobStatus.Paused;
     public bool CanPauseResume => Status is JobStatus.Running or JobStatus.Paused;
@@ -120,7 +123,8 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
     public ObservableCollection<FileOperationJob> Jobs { get; } = [];
 
     public Func<FileConflictContext, Task<ConflictDecision>>? ConflictResolver { get; set; }
-    public Func<Task>? OnJobFinishedRefresh { get; set; }
+    /// <summary>Runs after every job, finished or not, with that job.</summary>
+    public Func<FileOperationJob, Task>? OnJobFinishedRefresh { get; set; }
 
     private int _activeJobCount;
     public int ActiveJobCount
@@ -194,7 +198,7 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
 
                 if (OnJobFinishedRefresh is not null)
                 {
-                    try { await OnJobFinishedRefresh(); } catch { }
+                    try { await OnJobFinishedRefresh(job); } catch { }
                 }
             }
         }
@@ -381,6 +385,8 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
                                 ReportProgress(fileName, force: fileDone);
                             });
                     }
+
+                    job.CreatedPaths.Add(targetPath);
                 }
                 catch (OperationCanceledException)
                 {

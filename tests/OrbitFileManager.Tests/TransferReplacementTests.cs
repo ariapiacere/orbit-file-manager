@@ -58,7 +58,7 @@ public sealed class TransferReplacementTests : IDisposable
         {
             using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+            queue.OnJobFinishedRefresh = _ => { finished.TrySetResult(); return Task.CompletedTask; };
             var job = queue.EnqueueTransfer(sources, dst, move);
             await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
             Assert.Empty(job.Errors);
@@ -111,7 +111,7 @@ public sealed class TransferReplacementTests : IDisposable
             {
                 using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
                 var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+                queue.OnJobFinishedRefresh = _ => { finished.TrySetResult(); return Task.CompletedTask; };
                 var job = queue.EnqueueTransfer([folder, video], dst, isMove: false);
                 await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
                 Assert.Empty(job.Errors);
@@ -155,7 +155,7 @@ public sealed class TransferReplacementTests : IDisposable
         {
             using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+            queue.OnJobFinishedRefresh = _ => { finished.TrySetResult(); return Task.CompletedTask; };
             var job = queue.EnqueueTransfer([source], dst, isMove: false);
             await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
             Assert.Equal(JobStatus.CompletedWithErrors, job.Status);
@@ -195,7 +195,7 @@ public sealed class TransferReplacementTests : IDisposable
         {
             using var queue = new FileOperationQueue(logger) { ConflictResolver = Resolve };
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            queue.OnJobFinishedRefresh = () => { finished.TrySetResult(); return Task.CompletedTask; };
+            queue.OnJobFinishedRefresh = _ => { finished.TrySetResult(); return Task.CompletedTask; };
             var job = queue.EnqueueTransfer([source], dst, isMove: false);
             await Task.Delay(300);
             job.Cancel();

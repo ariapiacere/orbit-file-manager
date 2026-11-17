@@ -240,7 +240,11 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         _onItemsLoaded?.Invoke(this);
     }
 
-    public async Task<bool> NavigateAsync(string targetPath, bool recordHistory = true, string? selectPathAfterLoad = null)
+    public Task<bool> NavigateAsync(string targetPath, bool recordHistory = true, string? selectPathAfterLoad = null) =>
+        NavigateAsync(targetPath, recordHistory, selectPathAfterLoad is null ? null : [selectPathAfterLoad]);
+
+    /// <param name="selectPathsAfterLoad">Items to select once the folder is listed; the first one becomes <see cref="SelectedItem"/>.</param>
+    public async Task<bool> NavigateAsync(string targetPath, bool recordHistory, IReadOnlyList<string>? selectPathsAfterLoad)
     {
         string normalized = PathValidator.NormalizePath(targetPath);
         if (string.IsNullOrWhiteSpace(normalized))
@@ -307,7 +311,7 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             _allItems = result.Items.ToList();
             TotalItemCount = _allItems.Count;
 
-            ApplyFilterAndSort(selectPathAfterLoad);
+            ApplyFilterAndSort(selectPathsAfterLoad);
             ApplyCollectionGrouping();
             _loadedFolderStamp = result.FolderStampUtc;
             EnsureWatcher(result.NormalizedPath);
@@ -318,7 +322,7 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             if (!isSamePath)
             {
                 _onDirectoryChanged?.Invoke(this, previousPath, result.NormalizedPath);
-                FolderNavigated?.Invoke(!string.IsNullOrEmpty(selectPathAfterLoad));
+                FolderNavigated?.Invoke(selectPathsAfterLoad is { Count: > 0 });
             }
 
             return true;
@@ -343,14 +347,42 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         }
     }
 
-    public async Task RefreshAsync(bool preserveSelection = true, string? explicitSelectPath = null)
+    /// <param name="preserveSelection">Keep every selected item selected (reloads replace the item instances).</param>
+    /// <param name="explicitSelectPath">Select this item instead, e.g. a folder just created.</param>
+    /// <param name="explicitSelectPaths">Select these items instead, e.g. the files a copy just made.</param>
+    public async Task RefreshAsync(
+        bool preserveSelection = true,
+        string? explicitSelectPath = null,
+        IReadOnlyList<string>? explicitSelectPaths = null)
     {
         if (IsSearchTab || string.IsNullOrWhiteSpace(CurrentPath))
             return;
 
-        string? pathToReselect = explicitSelectPath
-            ?? (preserveSelection ? SelectedItem?.FullPath ?? (IsUnavailable ? _sessionSelectPath : null) : null);
-        await NavigateAsync(CurrentPath, recordHistory: false, selectPathAfterLoad: pathToReselect);
+        IReadOnlyList<string>? toSelect =
+            explicitSelectPaths is { Count: > 0 } ? explicitSelectPaths
+            : explicitSelectPath is not null ? [explicitSelectPath]
+            : preserveSelection ? CurrentSelectionPaths()
+            : null;
+        await NavigateAsync(CurrentPath, recordHistory: false, toSelect);
+    }
+
+    /// <summary>The selected items' paths, the focused one (<see cref="SelectedItem"/>) first.</summary>
+    private IReadOnlyList<string>? CurrentSelectionPaths()
+    {
+        if (SelectedItems.Count == 0)
+            return SelectedItem is not null ? [SelectedItem.FullPath]
+                : IsUnavailable && _sessionSelectPath is not null ? [_sessionSelectPath]
+                : null;
+
+        var paths = new List<string>(SelectedItems.Count);
+        if (SelectedItem is not null)
+            paths.Add(SelectedItem.FullPath);
+        foreach (var item in SelectedItems)
+        {
+            if (!ReferenceEquals(item, SelectedItem))
+                paths.Add(item.FullPath);
+        }
+        return paths;
     }
 
     public async Task GoBackAsync()
@@ -400,7 +432,7 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             SortDescending = column is SortColumn.Size or SortColumn.Modified or SortColumn.Created;
         }
 
-        ApplyFilterAndSort(SelectedItem?.FullPath);
+        ApplyFilterAndSort(CurrentSelectionPaths());
     }
 
     public void UpdateSelection(IReadOnlyList<FileEntryItem> items)
@@ -614,7 +646,8 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         catch { }
     }
 
-    private void ApplyFilterAndSort(string? pathToSelect = null)
+    /// <param name="pathsToSelect">Items to select afterwards (others are deselected); the first becomes <see cref="SelectedItem"/>.</param>
+    private void ApplyFilterAndSort(IReadOnlyList<string>? pathsToSelect = null)
     {
         IEnumerable<FileEntryItem> query = _allItems;
 
@@ -629,22 +662,35 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
         var sorted = SortEntries(query, SortColumn, SortDescending);
 
         DisplayedItems.Clear();
-        FileEntryItem? matchToSelect = null;
 
+        // Normalized once here instead of per row: item paths come from the file system already normalized.
+        Dictionary<string, int>? wanted = null;
+        if (pathsToSelect is { Count: > 0 })
+        {
+            wanted = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < pathsToSelect.Count; i++)
+                wanted.TryAdd(PathValidator.NormalizePath(pathsToSelect[i]), i);
+        }
+
+        var matches = new List<(int Rank, FileEntryItem Item)>();
         foreach (var item in sorted)
         {
             DisplayedItems.Add(item);
-            if (pathToSelect is not null && PathValidator.PathsEqual(item.FullPath, pathToSelect))
-                matchToSelect = item;
+            if (wanted is not null && wanted.TryGetValue(item.FullPath, out int rank))
+                matches.Add((rank, item));
         }
 
         DisplayedItemCount = DisplayedItems.Count;
         OnPropertyChanged(nameof(ItemCountSummary));
 
-        if (matchToSelect is not null)
+        if (matches.Count > 0)
         {
-            SelectedItem = matchToSelect;
-            UpdateSelection([matchToSelect]);
+            // The first requested path that exists becomes the focused item; the rest keep list order.
+            var primary = matches.MinBy(m => m.Rank).Item;
+            var selection = new List<FileEntryItem>(matches.Count) { primary };
+            selection.AddRange(matches.Select(m => m.Item).Where(i => !ReferenceEquals(i, primary)));
+            SelectedItem = primary;
+            UpdateSelection(selection);
         }
         else
         {

@@ -1,5 +1,30 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-17 — New Folder no longer scrolls Details sideways; copied items stay selected
+
+**Sideways jump.** After New Folder, a copy or any reload, the Details list could jump almost to its right end, so
+the Name column disappeared.
+- Cause: a reload replaces the item instances, so `BrowserPaneControl.SyncSelectionIntoActiveList` re-selects the row
+  and calls `ScrollIntoView`. For a row that has no container yet (below the visible rows), WPF also scrolls
+  horizontally to the row's far edge. Measured with a 1000 px window: 372 of 389 px after New Folder (the watcher
+  reload right after it), 387 after a copy.
+- Fix: `ScrollIntoViewVertically` keeps the Details horizontal offset. It restores it right away, at `Loaded` and at
+  `ContextIdle`, because the shift can land in a later layout pass. A 2 px nudge is undone in the same pass.
+
+**Copied items selected.** Ctrl+V, drag-drop and the copy/move-to-other-pane commands all go through
+`FileOperationQueue`.
+- `FileOperationJob.CreatedPaths` lists every top-level item a job wrote. With "Keep both" or a same-folder copy
+  that is the renamed copy.
+- `OnJobFinishedRefresh` now receives the job. `MainViewModel.RefreshAffectedTabsAsync(folder, paths)` makes every
+  tab showing the destination select exactly those items; other tabs keep their selection. The direct
+  `RunFileTransferAsync` path does the same with `FileOperationResult.CreatedOrUpdatedPaths`.
+- Reloads keep the whole selection: `RefreshAsync(preserveSelection: true)` used to keep only `SelectedItem`, so a
+  watcher reload cut a multi-selection down to one item. `NavigateAsync` / `ApplyFilterAndSort` now take a list of
+  paths, and the first one that exists becomes `SelectedItem`. Sorting keeps the whole selection too.
+- Tests: `SelectionAfterTransferTests` (created paths incl. Keep both, multi-selection kept across a reload, explicit
+  paths with a missing and a differently-cased one). The in-process UI harness, New Folder through the real name
+  dialog with 80 folders, copy, wait for the watcher reload, then F5, passes 11 checks; the old code fails 7.
+
 ## 2026-11-12 — 1.2.0: tabs survive crashes, single-file exe
 
 **Crash-safe tabs.** Before, `sessions.json` was written only in `Window_Closing`, so a crash, a forced kill or a

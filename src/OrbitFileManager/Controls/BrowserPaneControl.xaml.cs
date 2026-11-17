@@ -160,7 +160,7 @@ public partial class BrowserPaneControl : UserControl
             }
 
             if (wanted.Count > 0)
-                lv.ScrollIntoView(wanted[0]);
+                ScrollIntoViewVertically(lv, wanted[0]);
         }
 
         if (viewModeChanged && ReferenceEquals(lv, DetailsListView))
@@ -169,6 +169,32 @@ public partial class BrowserPaneControl : UserControl
             Dispatcher.BeginInvoke(() => FindDescendant<ScrollViewer>(DetailsListView)?.ScrollToLeftEnd(),
                 System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
+    }
+
+    /// <summary>
+    /// Scrolls <paramref name="item"/> into view without moving the Details columns sideways. WPF's ScrollIntoView
+    /// also scrolls horizontally to the row's edge, and for a row that has not been created yet (below the
+    /// visible rows, e.g. after New Folder or a reload) that is nearly the far right, which hides the Name column.
+    /// </summary>
+    private void ScrollIntoViewVertically(ListView lv, FileEntryItem item)
+    {
+        ScrollViewer? sv = ReferenceEquals(lv, DetailsListView) ? FindDescendant<ScrollViewer>(lv) : null;
+        double keepX = sv?.HorizontalOffset ?? 0;
+
+        lv.ScrollIntoView(item);
+        if (sv is null)
+            return;
+
+        void Restore()
+        {
+            if (Math.Abs(sv.HorizontalOffset - keepX) > 0.5)
+                sv.ScrollToHorizontalOffset(keepX);
+        }
+
+        // The sideways scroll can land in a later layout pass, so put the offset back after those too.
+        Restore();
+        Dispatcher.BeginInvoke(Restore, System.Windows.Threading.DispatcherPriority.Loaded);
+        Dispatcher.BeginInvoke(Restore, System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
     public void ResetScrollToLeftAndTop(bool resetVertical = true)

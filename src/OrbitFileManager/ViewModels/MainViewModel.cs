@@ -258,10 +258,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
         TabThumbnailsLoader = TriggerThumbnailLoadForTab;
 
         _operationQueue.ConflictResolver = _dialogService.ResolveConflictAsync;
-        _operationQueue.OnJobFinishedRefresh = async () =>
+        _operationQueue.OnJobFinishedRefresh = async job =>
         {
+            // Like Explorer: what a copy, move or drop just made ends up selected in the folder it landed in.
+            var created = job.CreatedPaths.ToList();
             if (Application.Current?.Dispatcher is { } disp)
-                await disp.InvokeAsync(async () => await RefreshAffectedTabsAsync());
+                await disp.InvokeAsync(async () => await RefreshAffectedTabsAsync(job.DestinationDirectory, created));
         };
         QueuedTransferHandler = (sources, dest, move) =>
         {
@@ -1471,7 +1473,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 statusProgress: progress,
                 cancellationToken: cts.Token);
 
-            await RefreshAffectedTabsAsync();
+            await RefreshAffectedTabsAsync(destinationPath, result.CreatedOrUpdatedPaths);
 
             if (result.IsCancelled)
             {
@@ -1988,12 +1990,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public async Task RefreshAffectedTabsAsync()
+    /// <param name="selectInFolder">With <paramref name="selectPaths"/>: tabs showing this folder select those items
+    /// instead of keeping their selection (the items a copy or move just wrote there).</param>
+    public async Task RefreshAffectedTabsAsync(string? selectInFolder = null, IReadOnlyList<string>? selectPaths = null)
     {
         // A replacement can have the same size and timestamp as the previous file.
         _thumbnailService.ClearCache();
         foreach (var tab in GetAllOpenTabs())
-            await tab.RefreshAsync(preserveSelection: true);
+        {
+            bool showsDestination = selectPaths is { Count: > 0 } && selectInFolder is not null &&
+                                    !tab.IsSearchTab && PathValidator.PathsEqual(tab.CurrentPath, selectInFolder);
+            if (showsDestination)
+                await tab.RefreshAsync(preserveSelection: false, explicitSelectPaths: selectPaths);
+            else
+                await tab.RefreshAsync(preserveSelection: true);
+        }
     }
 
     private IEnumerable<BrowserTabViewModel> GetAllOpenTabs()
