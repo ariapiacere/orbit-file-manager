@@ -463,6 +463,12 @@
                     <ListView.GroupStyle>
                         <StaticResource ResourceKey="FileCategoryGroupStyle" />
                     </ListView.GroupStyle>
+                    <!-- Bringing a row into view never scrolls sideways (see DetailsRowsPanel) -->
+                    <ListView.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <local:DetailsRowsPanel />
+                        </ItemsPanelTemplate>
+                    </ListView.ItemsPanel>
                     <ListView.View>
                         <GridView x:Name="DetailsGridView" AllowsColumnReorder="True">
                             <!-- Name (width is fitted to the free space in code-behind until the user resizes it) -->

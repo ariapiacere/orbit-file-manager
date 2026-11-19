@@ -1,5 +1,39 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-19 (later) — Rename / New Folder no longer jump the Details list sideways
+
+User report: after Rename or New Folder the list often ends up scrolled to the far right. The 1.2.1 fix
+(`ScrollIntoViewVertically`) was only ever tested from horizontal offset 0. Starting from a scrolled-right list
+(as a user who scrolled to see the dates), v1.2.3 still jumped to 445/445 px or back to 0. The UI harness
+`renamejump` mode measures this. It runs 9 cases (New Folder landing above/below, rename in place, rename to
+top/bottom, focus returning to the list, End/Home) in single/dual pane, starting at 0, 60, 120 or 200 px. It
+checks the offset at every rendered frame (`CompositionTarget.Rendering`), and that the selected row is
+vertically in view.
+
+Three causes, three fixes:
+1. `BrowserTabViewModel.ApplyCollectionGrouping` cleared `GroupDescriptions` after every reload, even with grouping
+   off. That rebuilds the whole list and produced the far-right jumps (445 px). It now does nothing unless
+   grouping really changes.
+2. A reload empties and refills the list. In one layout pass the extent collapses to ~10 px although all rows
+   are there, so WPF clamps the offset to 0.
+   - `BrowserPaneControl` remembers the offset when a reload starts (`IsLoading`) or a selection is pushed back.
+     Until 1–3 s after it settles, any sideways move is put back (`KeepGuardedHorizontalOffset`).
+   - The value is set straight on the row panel (`SetHorizontalOffset`), not through `ScrollToHorizontalOffset`,
+     which is queued and let a frame through.
+   - Mouse down, mouse wheel and Left/Right keys in the list end the guard. Opening another folder, switching
+     tabs or switching view resets the remembered offset to 0, as before.
+3. `Controls/DetailsRowsPanel` (the Details `ItemsPanel`, a `VirtualizingStackPanel`) re-implements
+   `IScrollInfo.MakeVisible`: a bring-into-view request is narrowed to a 1 px strip at x = 1 in panel coordinates.
+   The rows are arranged shifted by the offset, so that strip is always visible and only the vertical part
+   remains. Do not "undo" the offset after `base.MakeVisible` instead: WPF retries the request and the UI thread
+   hangs in a layout loop (seen in the harness). Viewport-relative x values land 2 px off.
+
+Result: every rename / New Folder case ends at the starting offset in all setups; old code fails 7 cases from
+200 px. Left over: End/Home still nudge 2 px (WPF keyboard navigation aligns the row edge through
+`ScrollToHorizontalOffset`, not `MakeVisible`). In about 2 of 10 runs one rendered frame showed offset 0 before the
+guard put it back. The harness now exits with code 99 after `HARNESS_TIMEOUT_S` (default 240 s), so a hung
+layout cannot block a run.
+
 ## 2026-11-19 — "Fit columns to pane": Details without side scrolling
 
 Dual-pane Details always scrolled sideways: the non-Name columns add up to 564 px and Name keeps at least 200 px,

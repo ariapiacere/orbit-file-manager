@@ -631,6 +631,11 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
             if (view is null)
                 return;
 
+            // Touching GroupDescriptions rebuilds the whole list (and loses its sideways scroll position), so only
+            // when grouping really changes, not after every reload.
+            if ((view.GroupDescriptions.Count > 0) == GroupByType)
+                return;
+
             view.GroupDescriptions.Clear();
             if (GroupByType)
                 view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(FileEntryItem.GroupCategory)));

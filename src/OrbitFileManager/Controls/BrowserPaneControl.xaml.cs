@@ -57,7 +57,18 @@ public partial class BrowserPaneControl : UserControl
             // The vertical scrollbar appearing/disappearing changes the usable width.
             if (e.ViewportWidthChange != 0)
                 LayoutDetailsColumns();
+            if (e.HorizontalChange != 0 || e.ExtentWidthChange != 0)
+                KeepGuardedHorizontalOffset(e.OriginalSource as ScrollViewer);
         }));
+
+        // Anything the user does to the list ends the guard, so their own sideways scrolling is never undone.
+        DetailsListView.PreviewMouseDown += (_, _) => EndHorizontalGuard();
+        DetailsListView.PreviewMouseWheel += (_, _) => EndHorizontalGuard();
+        DetailsListView.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Left or Key.Right)
+                EndHorizontalGuard();
+        };
 
         var widthDescriptor = DependencyPropertyDescriptor.FromProperty(GridViewColumn.WidthProperty, typeof(GridViewColumn));
         foreach (GridViewColumn column in DetailsGridView.Columns)
@@ -89,6 +100,7 @@ public partial class BrowserPaneControl : UserControl
         if (e.PropertyName == nameof(BrowserPaneViewModel.ActiveTab))
         {
             RebindActiveTabSubscription(_subscribedPane?.ActiveTab);
+            _keptHorizontalOffset = 0; // another tab starts at the left on purpose
             ResetScrollToLeftAndTop(resetVertical: true);
         }
     }
@@ -114,11 +126,58 @@ public partial class BrowserPaneControl : UserControl
 
     private void OnTabFolderNavigated(bool hasExplicitSelection)
     {
+        _keptHorizontalOffset = 0; // a different folder starts at the left on purpose
         ResetScrollToLeftAndTop(resetVertical: !hasExplicitSelection);
+    }
+
+    // ─── Keeping the Details list's sideways position through reloads ──────────
+    // A reload (after Rename, New Folder, a copy, F5 or the folder watcher) empties and refills the list. In between,
+    // WPF loses the horizontal offset or scrolls to a row's far edge while bringing the selection back into view, so
+    // the list jumped to the far right (or back to the left). From the moment a reload starts until it has settled,
+    // any sideways move the user did not make is put back. The user's own input ends that at once.
+
+    private double _keptHorizontalOffset;
+    private long _keepHorizontalUntil;
+
+    private ScrollViewer? DetailsScrollViewer() => FindDescendant<ScrollViewer>(DetailsListView);
+
+    private void GuardHorizontalOffset(int milliseconds)
+    {
+        if (DetailsScrollViewer() is not { } sv)
+            return;
+
+        long now = Environment.TickCount64;
+        if (now > _keepHorizontalUntil)
+            _keptHorizontalOffset = sv.HorizontalOffset; // a new guard remembers where the user is now
+        _keepHorizontalUntil = Math.Max(_keepHorizontalUntil, now + milliseconds);
+    }
+
+    private void EndHorizontalGuard() => _keepHorizontalUntil = 0;
+
+    private void KeepGuardedHorizontalOffset(ScrollViewer? changed)
+    {
+        if (changed is null || Environment.TickCount64 > _keepHorizontalUntil || IsFittingColumns ||
+            !ReferenceEquals(changed, DetailsScrollViewer()))
+            return;
+
+        // While the list is (nearly) empty there is nothing to scroll; the offset comes back once the rows are there.
+        double target = Math.Min(_keptHorizontalOffset, changed.ScrollableWidth);
+        if (Math.Abs(changed.HorizontalOffset - target) > 0.5)
+        {
+            // Straight to the row panel: it re-lays out before the next frame is drawn. ScrollToHorizontalOffset is
+            // queued and could let one frame show the jump.
+            if (FindDescendant<DetailsRowsPanel>(DetailsListView) is { } rows)
+                rows.SetHorizontalOffset(target);
+            else
+                changed.ScrollToHorizontalOffset(target);
+        }
     }
 
     private void OnActiveTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(BrowserTabViewModel.IsLoading) && _subscribedTab is { } loadingTab)
+            GuardHorizontalOffset(loadingTab.IsLoading ? 3000 : 1000);
+
         // Each view mode is its own ListView, and reloads (F5, view switch, file watcher) replace the item
         // instances. Either way the tab's selection must be pushed back into the visible list, once the
         // bindings have settled.
@@ -166,6 +225,7 @@ public partial class BrowserPaneControl : UserControl
         if (viewModeChanged && ReferenceEquals(lv, DetailsListView))
         {
             // Coming back to Details could leave the rows scrolled to the far right (Name column hidden).
+            _keptHorizontalOffset = 0;
             Dispatcher.BeginInvoke(() => FindDescendant<ScrollViewer>(DetailsListView)?.ScrollToLeftEnd(),
                 System.Windows.Threading.DispatcherPriority.ContextIdle);
         }
@@ -179,7 +239,10 @@ public partial class BrowserPaneControl : UserControl
     private void ScrollIntoViewVertically(ListView lv, FileEntryItem item)
     {
         ScrollViewer? sv = ReferenceEquals(lv, DetailsListView) ? FindDescendant<ScrollViewer>(lv) : null;
-        double keepX = sv?.HorizontalOffset ?? 0;
+        if (sv is not null)
+            GuardHorizontalOffset(800);
+        // During a reload the offset may already have jumped; the guard remembers where the user had it.
+        double keepX = sv is null ? 0 : _keptHorizontalOffset;
 
         lv.ScrollIntoView(item);
         if (sv is null)
