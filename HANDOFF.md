@@ -1,5 +1,18 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-19 (night) — Favorites docked at the top of the sidebar
+
+- **Layout:** the sidebar is now a two-row `Grid` (`SidebarRoot`).
+  - Row 0 is `FavoritesDock`: header with +, the empty hint, and the list. It sits at the top-left, with a
+    hairline under it, and never scrolls away.
+  - Row 1 is the old `SidebarScrollViewer` with Quick Access, Workspaces, Drives, Folder Tree and Recent.
+- **Many favorites:** they scroll inside `FavoritesScrollViewer`, whose `MaxHeight` is 45% of `SidebarRoot`
+  (`MultiplyConverter`, parameter 0.45). The rest of the sidebar keeps its room.
+- **Unchanged:** drag-drop (`FavoritesSection_DragOver/Drop`) and the favorite context menu. The folder tree still
+  forwards the mouse wheel to `SidebarScrollViewer`.
+- **Tests:** UI harness `favdock` mode (8 checks): empty hint, dock at the sidebar's top-left, favorites stay put
+  while the rest scrolls 1120 px, 30 favorites stay within 45% and scroll inside.
+
 ## 2026-11-19 (evening) — File Operation Queue shows one bar
 
 - **What it shows:** the queue panel shows a single job by default, `FileOperationQueue.CurrentJob`: the one

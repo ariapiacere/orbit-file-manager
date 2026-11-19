@@ -128,6 +128,19 @@ public sealed class HexStringToBrushConverter : IValueConverter
         Binding.DoNothing;
 }
 
+/// <summary>A double times the converter parameter (invariant culture), e.g. 45% of a panel's height.</summary>
+public sealed class MultiplyConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        double factor = parameter is string s && double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out double f) ? f : 1.0;
+        return value is double d && !double.IsNaN(d) && !double.IsInfinity(d) ? Math.Max(0, d * factor) : double.PositiveInfinity;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Binding.DoNothing;
+}
+
 public sealed class RatioToWidthConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object? parameter, CultureInfo culture)
