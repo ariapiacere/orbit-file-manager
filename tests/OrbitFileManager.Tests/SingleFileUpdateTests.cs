@@ -250,8 +250,11 @@ public sealed class SingleFileUpdateTests : IDisposable
     [Fact]
     public void FolderScript_CopiesTheBuildAndKeepsUserData()
     {
+        // Old and new builds differ in size, as real builds do. With equal size and an equal write time (two 7-byte
+        // files written in one clock tick) robocopy files the exe as "modified" and skips it without /IM, which made
+        // this test fail now and then. Real packages never look like that.
         string staged = Path.Combine(_tempRoot, "staged");
-        Write(Path.Combine(staged, "OrbitFileManager.exe"), "new exe");
+        Write(Path.Combine(staged, "OrbitFileManager.exe"), "new exe build");
         Write(Path.Combine(staged, "OrbitFileManager.dll"), "new dll");
         Write(Path.Combine(staged, "Data", "settings.json"), "defaults");
         string install = Path.Combine(_tempRoot, "Orbit folder");
@@ -261,7 +264,10 @@ public sealed class SingleFileUpdateTests : IDisposable
         var (plan, script) = PrepareScript(staged, install, Path.Combine(install, "OrbitFileManager.exe"), NoSuchProcess(), singleFile: false);
         RunScript(script, TimeSpan.FromSeconds(60));
 
-        Assert.Equal("new exe", File.ReadAllText(Path.Combine(install, "OrbitFileManager.exe")));
+        string installed = File.ReadAllText(Path.Combine(install, "OrbitFileManager.exe"));
+        Assert.True(installed == "new exe build",
+            $"exe still says '{installed}'. Script log:\n{(File.Exists(plan.LogFilePath) ? File.ReadAllText(plan.LogFilePath) : "(none)")}\n" +
+            $"Result: {(File.Exists(plan.ResultFilePath) ? File.ReadAllText(plan.ResultFilePath) : "(none)")}\nScript:\n{File.ReadAllText(script)}");
         Assert.Equal("new dll", File.ReadAllText(Path.Combine(install, "OrbitFileManager.dll")));
         Assert.Equal("mine", File.ReadAllText(Path.Combine(install, "Data", "settings.json")));
         Assert.Equal("ok 9.9.9", File.ReadAllText(plan.ResultFilePath).Trim());

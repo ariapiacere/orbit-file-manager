@@ -91,9 +91,13 @@ so any pane narrower than about 780 px overflowed.
 - The queue records each outcome with `RecordItem(source, JobItemOutcome, target)` on the UI thread;
   `CreatedPaths` is now filled from it.
 
-Known: `SingleFileUpdateTests.FolderScript_CopiesTheBuildAndKeepsUserData` failed twice (once in the full suite,
-once in its class) and then passed 12 times in a row; the error message was not captured. It tests the 1.2.0
-robocopy install script, which this change does not touch. If `release.ps1` stops on it, rerun.
+`SingleFileUpdateTests.FolderScript_CopiesTheBuildAndKeepsUserData` used to fail now and then; fixed 2026-11-19.
+- Cause: its old and new exe were both 7 bytes and written within one clock tick. robocopy then classes the
+  exe as "modified" (same size and write time, different change time) and skips it without `/IM`; `/IS /IT` do
+  not cover that class. Seen with robocopy `/L /V`.
+- The test now uses builds of different sizes, as real ones are. The updater script is unchanged.
+- The folder (robocopy) path is only used for folder-style packages; releases are a single exe, installed with
+  `copy` + `move`.
 
 ## 2026-11-17 — New Folder no longer scrolls Details sideways; copied items stay selected
 
