@@ -64,6 +64,8 @@
     <Geometry x:Key="IconViewList">M4,7 H10 M14,7 H20 M4,12 H10 M14,12 H20 M4,17 H10 M14,17 H20</Geometry>
     <Geometry x:Key="IconViewTiles">M4,4 H10 V10 H4 Z M14,4 H20 V10 H14 Z M4,14 H10 V20 H4 Z M14,14 H20 V20 H14 Z</Geometry>
     <Geometry x:Key="IconViewSmall">M4,5 H8 V9 H4 Z M10,5 H14 V9 H10 Z M16,5 H20 V9 H16 Z M4,13 H8 V17 H4 Z M10,13 H14 V17 H10 Z M16,13 H20 V17 H16 Z</Geometry>
+    <!-- Fit columns: two pane edges with arrows pointing in -->
+    <Geometry x:Key="IconFitColumns">M3,5 V19 M21,5 V19 M6.5,12 H10.5 M8.5,9.5 L11,12 L8.5,14.5 M17.5,12 H13.5 M15.5,9.5 L13,12 L15.5,14.5</Geometry>
     <Geometry x:Key="IconViewThumbnails">M3.5,4.5 H20.5 V19.5 H3.5 Z M3.5,15 L8.5,10.5 L13,14.5 L16.5,11.5 L20.5,15.5 M8.5,8 A1.5,1.5 0 1,0 8.5,8.01</Geometry>
 
     <Geometry x:Key="IconCopyPath">M10,13 A5,5 0 0,0 17.54,13.54 L19.5,11.5 A5,5 0 0,0 12.46,4.46 L11.3,5.6 M14,11 A5,5 0 0,0 6.46,10.46 L4.5,12.5 A5,5 0 0,0 11.54,19.54 L12.7,18.4</Geometry>

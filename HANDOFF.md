@@ -1,5 +1,29 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-19 — "Fit columns to pane": Details without side scrolling
+
+Dual-pane Details always scrolled sideways: the non-Name columns add up to 564 px and Name keeps at least 200 px,
+so any pane narrower than about 780 px overflowed.
+- **Switch:** a toolbar toggle next to the view modes (`FitColumnsToggle`, icon `IconFitColumns`) and the first
+  item of the column-header right-click menu. It is `MainViewModel.FitDetailsColumns` /
+  `ToggleFitDetailsColumnsCommand`, saved as `AppSettings.FitDetailsColumns` (default off).
+- **Layout:** `Controls/DetailsColumnFitter.Fit(available, columns)` is pure and unit-tested. As the pane narrows:
+  1. Preferred widths, and Name gets the rest.
+  2. The other columns shrink evenly towards their minimums so Name keeps 200 px.
+  3. Every other column at its minimum, and Name drops towards 120 px.
+  4. Columns drop out in `DropOrder` (Attr, Created, Ext, Type, Size, Modified last).
+- **Numbers:** `BrowserPaneControl.ColumnFit` holds preferred/min/drop order. Dates have a 108 px minimum
+  ("2026-11-19 10:01" is 93 px plus 12 px padding), so a date is never cut off; Type and names end in "…".
+- **In the pane:** fit mode sets the Details `ScrollViewer.HorizontalScrollBarVisibility` to Disabled.
+  `FitAllColumns` runs on resize, viewport changes and column visibility changes. A dragged non-Name column keeps
+  its width as its new preferred width (`_fitPreferredWidths`); Name always takes what is left. With the mode off,
+  the old `FitNameColumn` behaviour is unchanged.
+- **Tests:** `DetailsColumnFitterTests` (8 cases, including a 0–2000 px sweep). The UI harness `fitcolumns` mode
+  checks five pane widths, 1284 to 319 px (single/dual, splitter 75/25 and 50/50, side panels on/off): no extent
+  beyond the viewport, Name ≥ 120, dates whole, a dragged column, toggle on/off and the saved setting. Note that
+  Farm01's screen is 1280 px wide and a window cannot grow beyond it, so vary pane widths with the splitter and
+  panels, not `Win.Width`.
+
 ## 2026-11-17 (later) — Busy clipboard no longer crashes Ctrl+C; queue rows list their files
 
 **Clipboard.** Ctrl+C showed "An unexpected error occurred: OpenClipboard Failed (0x800401D0 CLIPBRD_E_CANT_OPEN)".

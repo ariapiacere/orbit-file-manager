@@ -157,6 +157,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _showAttributesColumn = true;
 
+    /// <summary>Details columns are squeezed into the pane width: no sideways scrollbar (see BrowserPaneControl).</summary>
+    [ObservableProperty]
+    private bool _fitDetailsColumns;
+
     [ObservableProperty]
     private bool _showToolbarTextLabels = true;
 
@@ -312,6 +316,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         ShowModifiedColumn = settings.ShowModifiedColumn;
         ShowCreatedColumn = settings.ShowCreatedColumn;
         ShowAttributesColumn = settings.ShowAttributesColumn;
+        FitDetailsColumns = settings.FitDetailsColumns;
         ShowToolbarTextLabels = settings.ShowToolbarTextLabels;
         ShowToolbarBatchRename = settings.ShowToolbarBatchRename;
         ShowToolbarSearch = settings.ShowToolbarSearch;
@@ -358,6 +363,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
     partial void OnShowModifiedColumnChanged(bool value) { _settingsService.Current.ShowModifiedColumn = value; _settingsService.Save(); }
     partial void OnShowCreatedColumnChanged(bool value) { _settingsService.Current.ShowCreatedColumn = value; _settingsService.Save(); }
     partial void OnShowAttributesColumnChanged(bool value) { _settingsService.Current.ShowAttributesColumn = value; _settingsService.Save(); }
+    partial void OnFitDetailsColumnsChanged(bool value) { _settingsService.Current.FitDetailsColumns = value; _settingsService.Save(); }
+
+    [RelayCommand]
+    public void ToggleFitDetailsColumns()
+    {
+        FitDetailsColumns = !FitDetailsColumns;
+        StatusMessage = FitDetailsColumns
+            ? "Details columns now fit the pane (no sideways scrolling)."
+            : "Details columns keep their full width.";
+    }
 
     public void ActivatePane(BrowserPaneViewModel pane)
     {

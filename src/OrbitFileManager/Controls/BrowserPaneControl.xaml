@@ -88,6 +88,8 @@
         <!-- Details Column Header Visibility Menu -->
         <ContextMenu x:Key="ColumnHeaderContextMenu"
                      DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+            <MenuItem Header="Fit Columns to Pane (no side scrolling)" IsCheckable="True" IsChecked="{Binding FitDetailsColumns, Mode=TwoWay}" />
+            <Separator />
             <MenuItem Header="Extension Column" IsCheckable="True" IsChecked="{Binding ShowExtensionColumn, Mode=TwoWay}" />
             <MenuItem Header="Size Column" IsCheckable="True" IsChecked="{Binding ShowSizeColumn, Mode=TwoWay}" />
             <MenuItem Header="Type Column" IsCheckable="True" IsChecked="{Binding ShowTypeColumn, Mode=TwoWay}" />

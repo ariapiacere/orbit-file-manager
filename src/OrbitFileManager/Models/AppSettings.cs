@@ -58,6 +58,9 @@ public sealed class AppSettings
     public bool ShowCreatedColumn { get; set; } = true;
     public bool ShowAttributesColumn { get; set; } = true;
 
+    /// <summary>Details view squeezes its columns into the pane width, so there is never a sideways scrollbar.</summary>
+    public bool FitDetailsColumns { get; set; } = false;
+
     // Customizable Toolbar Options
     public bool ShowToolbarTextLabels { get; set; } = true;
     public bool ShowToolbarBatchRename { get; set; } = true;

@@ -50,13 +50,13 @@ public partial class BrowserPaneControl : UserControl
         InitializeComponent();
         DataContextChanged += OnPaneDataContextChanged;
 
-        DetailsListView.SizeChanged += (_, _) => FitNameColumn();
-        DetailsListView.Loaded += (_, _) => FitNameColumn();
+        DetailsListView.SizeChanged += (_, _) => LayoutDetailsColumns();
+        DetailsListView.Loaded += (_, _) => { ApplyHorizontalScrollMode(); LayoutDetailsColumns(); };
         DetailsListView.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) =>
         {
             // The vertical scrollbar appearing/disappearing changes the usable width.
             if (e.ViewportWidthChange != 0)
-                FitNameColumn();
+                LayoutDetailsColumns();
         }));
 
         var widthDescriptor = DependencyPropertyDescriptor.FromProperty(GridViewColumn.WidthProperty, typeof(GridViewColumn));
@@ -262,21 +262,76 @@ public partial class BrowserPaneControl : UserControl
                 or nameof(MainViewModel.ShowTypeColumn)
                 or nameof(MainViewModel.ShowModifiedColumn)
                 or nameof(MainViewModel.ShowCreatedColumn)
-                or nameof(MainViewModel.ShowAttributesColumn))
+                or nameof(MainViewModel.ShowAttributesColumn)
+                or nameof(MainViewModel.FitDetailsColumns))
         {
             SyncDetailsColumns(vm);
         }
     }
 
+    // Default widths and, for "fit columns" mode, how narrow each column may get and which go first.
+    private static readonly Dictionary<string, (double Preferred, double Min, int DropOrder)> ColumnFit = new()
+    {
+        ["Ext"] = (56, 38, 3),
+        ["Size"] = (80, 60, 5),
+        ["Type"] = (132, 64, 4),
+        // Dates: "2026-11-19 10:01" is 93 px at 12 px Segoe UI, plus 12 px cell padding.
+        ["Modified"] = (124, 108, 6),
+        ["Created"] = (124, 108, 2),
+        ["Attr"] = (48, 36, 1)
+    };
+
+    // In "fit columns" mode a column the user dragged keeps that width as its preferred width.
+    private readonly Dictionary<GridViewColumn, double> _fitPreferredWidths = [];
+
+    private IEnumerable<(string Key, GridViewColumn Column, bool Visible)> OtherDetailsColumns(MainViewModel vm)
+    {
+        yield return ("Ext", ColExtension, vm.ShowExtensionColumn);
+        yield return ("Size", ColSize, vm.ShowSizeColumn);
+        yield return ("Type", ColType, vm.ShowTypeColumn);
+        yield return ("Modified", ColModified, vm.ShowModifiedColumn);
+        yield return ("Created", ColCreated, vm.ShowCreatedColumn);
+        yield return ("Attr", ColAttr, vm.ShowAttributesColumn);
+    }
+
     private void SyncDetailsColumns(MainViewModel vm)
     {
-        ColExtension.Width = vm.ShowExtensionColumn ? 56 : 0;
-        ColSize.Width = vm.ShowSizeColumn ? 80 : 0;
-        ColType.Width = vm.ShowTypeColumn ? 132 : 0;
-        ColModified.Width = vm.ShowModifiedColumn ? 124 : 0;
-        ColCreated.Width = vm.ShowCreatedColumn ? 124 : 0;
-        ColAttr.Width = vm.ShowAttributesColumn ? 48 : 0;
-        FitNameColumn();
+        _isFittingNameColumn = true;
+        try
+        {
+            foreach (var (key, column, visible) in OtherDetailsColumns(vm))
+                column.Width = visible ? ColumnFit[key].Preferred : 0;
+        }
+        finally
+        {
+            _isFittingNameColumn = false;
+        }
+
+        ApplyHorizontalScrollMode();
+        LayoutDetailsColumns();
+    }
+
+    private bool IsFittingColumns => MainVm?.FitDetailsColumns == true;
+
+    /// <summary>"Fit columns" mode turns the sideways scrollbar off; otherwise it shows when needed.</summary>
+    private void ApplyHorizontalScrollMode()
+    {
+        var mode = IsFittingColumns ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto;
+        ScrollViewer.SetHorizontalScrollBarVisibility(DetailsListView, mode);
+        if (FindDescendant<ScrollViewer>(DetailsListView) is { } sv)
+        {
+            sv.HorizontalScrollBarVisibility = mode;
+            if (IsFittingColumns)
+                sv.ScrollToLeftEnd();
+        }
+    }
+
+    private void LayoutDetailsColumns()
+    {
+        if (IsFittingColumns)
+            FitAllColumns();
+        else
+            FitNameColumn();
     }
 
     private void OnDetailsColumnWidthChanged(object? sender, EventArgs e)
@@ -284,11 +339,58 @@ public partial class BrowserPaneControl : UserControl
         if (_isFittingNameColumn)
             return;
 
+        if (IsFittingColumns)
+        {
+            // Dragging another column makes that its width from now on; Name always takes what is left.
+            if (sender is GridViewColumn column && !ReferenceEquals(column, ColName) && column.Width > 0)
+                _fitPreferredWidths[column] = column.Width;
+            FitAllColumns();
+            return;
+        }
+
         // A width change on Name that we did not make means the user dragged it: stop auto-fitting.
         if (ReferenceEquals(sender, ColName))
             _nameColumnUserSized = true;
         else
             FitNameColumn();
+    }
+
+    /// <summary>"Fit columns" mode: squeezes all visible columns into the pane width (see <see cref="DetailsColumnFitter"/>).</summary>
+    private void FitAllColumns()
+    {
+        if (MainVm is not { } vm || !DetailsListView.IsLoaded)
+            return;
+
+        double available = (FindDescendant<ScrollViewer>(DetailsListView) is { ViewportWidth: > 0 } sv
+            ? sv.ViewportWidth
+            : DetailsListView.ActualWidth) - DetailsRowChromeWidth;
+
+        var visible = OtherDetailsColumns(vm).Where(c => c.Visible).ToList();
+        var specs = visible.Select(c =>
+        {
+            var (preferred, min, dropOrder) = ColumnFit[c.Key];
+            if (_fitPreferredWidths.TryGetValue(c.Column, out double dragged))
+                preferred = Math.Max(min, dragged);
+            return new FitColumn(c.Key, preferred, min, dropOrder);
+        }).ToList();
+
+        var (name, widths) = DetailsColumnFitter.Fit(available, specs);
+
+        _isFittingNameColumn = true;
+        try
+        {
+            for (int i = 0; i < visible.Count; i++)
+            {
+                if (Math.Abs(visible[i].Column.Width - widths[i]) >= 0.5)
+                    visible[i].Column.Width = widths[i];
+            }
+            if (Math.Abs(ColName.Width - name) >= 0.5)
+                ColName.Width = name;
+        }
+        finally
+        {
+            _isFittingNameColumn = false;
+        }
     }
 
     /// <summary>Gives the Name column whatever width the other visible columns leave free (never below the minimum).</summary>

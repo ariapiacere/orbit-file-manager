@@ -88,6 +88,14 @@
                                           ToolTip="Thumbnails View">
                                 <Path Data="{StaticResource IconViewThumbnails}" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.6" Width="13" Height="13" Stretch="Uniform" />
                             </ToggleButton>
+                            <Border Width="1" Height="16" Margin="3,0" Background="{DynamicResource BorderSubtleBrush}" />
+                            <ToggleButton x:Name="FitColumnsToggle"
+                                          Style="{StaticResource ToolbarToggleButtonStyle}"
+                                          IsChecked="{Binding FitDetailsColumns, Mode=OneWay}"
+                                          Command="{Binding ToggleFitDetailsColumnsCommand}"
+                                          ToolTip="Fit Details columns to the pane (no side scrolling)">
+                                <Path Data="{StaticResource IconFitColumns}" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="13" Height="13" Stretch="Uniform" />
+                            </ToggleButton>
                         </StackPanel>
                     </Border>
 
