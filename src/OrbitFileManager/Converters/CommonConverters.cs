@@ -48,6 +48,18 @@ public sealed class NullOrEmptyToVisibilityConverter : IValueConverter
         Binding.DoNothing;
 }
 
+/// <summary>Visible when an int (e.g. a collection's Count) is greater than <see cref="Threshold"/>.</summary>
+public sealed class CountAboveToVisibilityConverter : IValueConverter
+{
+    public int Threshold { get; set; }
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is int count && count > Threshold ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        Binding.DoNothing;
+}
+
 public sealed class EnumEqualsToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

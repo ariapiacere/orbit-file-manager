@@ -131,6 +131,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _showOperationQueuePanel;
 
+    /// <summary>The queue panel lists every job; otherwise it shows one bar (<see cref="FileOperationQueue.CurrentJob"/>).</summary>
+    [ObservableProperty]
+    private bool _showAllQueueJobs;
+
     [ObservableProperty]
     private bool _canUndoBatchRename;
 
@@ -1406,6 +1410,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void ClearCompletedQueueJobs()
     {
         _operationQueue.ClearFinishedJobs();
+    }
+
+    [RelayCommand]
+    public void ToggleShowAllQueueJobs()
+    {
+        ShowAllQueueJobs = !ShowAllQueueJobs;
     }
 
     [RelayCommand]

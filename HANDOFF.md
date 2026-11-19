@@ -1,5 +1,22 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-19 (evening) — File Operation Queue shows one bar
+
+- **What it shows:** the queue panel shows a single job by default, `FileOperationQueue.CurrentJob`: the one
+  running or paused, else the next one waiting, else the newest. `Jobs` is newest first, so the next waiting job
+  is the last queued one. `CurrentJob` is re-raised from `RecalculateActiveCount`, which runs on every insert,
+  removal and status change.
+- **Toggle:** the header button `QueueShowAllButton` reads "Show all (N)" / "Latest only" and switches
+  `MainViewModel.ShowAllQueueJobs`. It is per session, not saved, and only visible with more than one job
+  (`CountAboveToVisibilityConverter`, Threshold 1).
+- **Template:** the job row is one shared `DataTemplate` (`QueueJobTemplate` in `MainWindow.xaml` resources), used
+  by the one-bar `ContentControl` and the full `ItemsControl`. Hover still lists every file.
+- **Tests:** UI harness `queuebar` mode (10 checks):
+  - The default and the newest job when idle.
+  - A paused running job beats a newer waiting one.
+  - Show all / Latest only.
+  - Clear Finished empties it.
+
 ## 2026-11-19 (later) — Rename / New Folder no longer jump the Details list sideways
 
 User report: after Rename or New Folder the list often ends up scrolled to the far right. The 1.2.1 fix

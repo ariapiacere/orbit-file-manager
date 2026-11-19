@@ -21,6 +21,72 @@
     <Window.Resources>
         <converters:BooleanToVisibilityExConverter x:Key="BoolToVis" />
         <converters:NullOrEmptyToVisibilityConverter x:Key="NullToVis" />
+        <converters:CountAboveToVisibilityConverter x:Key="QueueManyToVis" Threshold="1" />
+
+        <!-- One file operation job (queue panel: one bar or the full list). Hover lists every item of the job:
+             from/to folders, renamed copies, skipped, failed. -->
+        <DataTemplate x:Key="QueueJobTemplate">
+            <Border Background="{DynamicResource ElevatedSurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="10,6"
+                    Margin="0,0,0,5"
+                    ToolTip="{Binding ItemsToolTip}"
+                    ToolTipService.InitialShowDelay="300"
+                    ToolTipService.ShowDuration="60000">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <DockPanel>
+                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" />
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="{Binding SpeedText}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       HorizontalAlignment="Right"
+                                       Margin="10,0,0,0" />
+                        </DockPanel>
+                        <ProgressBar Minimum="0"
+                                     Maximum="100"
+                                     Value="{Binding ProgressPercent, Mode=OneWay}"
+                                     Height="5"
+                                     Margin="0,5,0,4"
+                                     Foreground="{DynamicResource AccentBrush}"
+                                     Background="{DynamicResource InputBackgroundBrush}"
+                                     BorderThickness="0" />
+                        <DockPanel>
+                            <TextBlock Text="{Binding SummaryText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding EtaText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding ErrorDetails}"
+                                   Visibility="{Binding ErrorDetails, Converter={StaticResource NullToVis}}"
+                                   TextWrapping="Wrap"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,5,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="{Binding PauseResumeLabel}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                FontSize="11"
+                                Padding="8,3"
+                                Margin="0,0,6,0"
+                                Command="{Binding TogglePauseCommand}"
+                                Visibility="{Binding CanPauseResume, Converter={StaticResource BoolToVis}}" />
+                        <Button Content="Cancel"
+                                Style="{StaticResource DangerButtonStyle}"
+                                FontSize="11"
+                                Padding="8,3"
+                                Command="{Binding CancelCommand}"
+                                Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
         <converters:EnumEqualsToVisibilityConverter x:Key="EnumToVis" />
         <converters:EnumEqualsToBooleanConverter x:Key="EnumToBool" />
         <converters:RatioToWidthConverter x:Key="RatioToWidth" />
@@ -880,6 +946,20 @@
                                Foreground="{DynamicResource TextMutedBrush}"
                                VerticalAlignment="Center" />
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="QueueShowAllButton"
+                                Style="{StaticResource ToolbarButtonStyle}"
+                                FontSize="11"
+                                Padding="8,2"
+                                Command="{Binding ToggleShowAllQueueJobsCommand}"
+                                ToolTip="Switch between the current job and the full list"
+                                Visibility="{Binding OperationQueue.Jobs.Count, Converter={StaticResource QueueManyToVis}}">
+                            <Grid>
+                                <TextBlock Text="{Binding OperationQueue.Jobs.Count, StringFormat='Show all ({0})'}"
+                                           Visibility="{Binding ShowAllQueueJobs, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
+                                <TextBlock Text="Latest only"
+                                           Visibility="{Binding ShowAllQueueJobs, Converter={StaticResource BoolToVis}}" />
+                            </Grid>
+                        </Button>
                         <Button Content="Clear Finished"
                                 Style="{StaticResource ToolbarButtonStyle}"
                                 FontSize="11"
@@ -900,79 +980,17 @@
                            Margin="2,6,0,6"
                            Visibility="{Binding OperationQueue.Jobs.Count, Converter={StaticResource NullToVis}, ConverterParameter=Invert}" />
 
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                    <ItemsControl ItemsSource="{Binding OperationQueue.Jobs}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <!-- Hover lists every item of the job: from/to folders, renamed copies, skipped, failed -->
-                                <Border Background="{DynamicResource ElevatedSurfaceBrush}"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="6"
-                                        Padding="10,6"
-                                        Margin="0,0,0,5"
-                                        ToolTip="{Binding ItemsToolTip}"
-                                        ToolTipService.InitialShowDelay="300"
-                                        ToolTipService.ShowDuration="60000">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                            <DockPanel>
-                                                <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" />
-                                                <TextBlock DockPanel.Dock="Right"
-                                                           Text="{Binding SpeedText}"
-                                                           FontSize="11"
-                                                           Foreground="{DynamicResource AccentBrush}"
-                                                           HorizontalAlignment="Right"
-                                                           Margin="10,0,0,0" />
-                                            </DockPanel>
-
-                                            <ProgressBar Minimum="0"
-                                                         Maximum="100"
-                                                         Value="{Binding ProgressPercent, Mode=OneWay}"
-                                                         Height="5"
-                                                         Margin="0,5,0,4"
-                                                         Foreground="{DynamicResource AccentBrush}"
-                                                         Background="{DynamicResource InputBackgroundBrush}"
-                                                         BorderThickness="0" />
-
-                                            <DockPanel>
-                                                <TextBlock Text="{Binding SummaryText}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
-                                                <TextBlock DockPanel.Dock="Right" Text="{Binding EtaText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Right" />
-                                            </DockPanel>
-                                            <TextBlock Text="{Binding ErrorDetails}"
-                                                       Visibility="{Binding ErrorDetails, Converter={StaticResource NullToVis}}"
-                                                       TextWrapping="Wrap"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextPrimaryBrush}"
-                                                       Margin="0,5,0,0" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Button Content="{Binding PauseResumeLabel}"
-                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                    FontSize="11"
-                                                    Padding="8,3"
-                                                    Margin="0,0,6,0"
-                                                    Command="{Binding TogglePauseCommand}"
-                                                    Visibility="{Binding CanPauseResume, Converter={StaticResource BoolToVis}}" />
-                                            <Button Content="Cancel"
-                                                    Style="{StaticResource DangerButtonStyle}"
-                                                    FontSize="11"
-                                                    Padding="8,3"
-                                                    Command="{Binding CancelCommand}"
-                                                    Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <Grid Grid.Row="1">
+                    <!-- Default: one bar, the job copying now (else the next waiting, else the newest) -->
+                    <ContentControl Content="{Binding OperationQueue.CurrentJob}"
+                                    ContentTemplate="{StaticResource QueueJobTemplate}"
+                                    Focusable="False"
+                                    Visibility="{Binding ShowAllQueueJobs, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding ShowAllQueueJobs, Converter={StaticResource BoolToVis}}">
+                        <ItemsControl ItemsSource="{Binding OperationQueue.Jobs}" ItemTemplate="{StaticResource QueueJobTemplate}" />
+                    </ScrollViewer>
+                </Grid>
             </Grid>
         </Border>
 

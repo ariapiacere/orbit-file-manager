@@ -683,9 +683,20 @@ public sealed class FileOperationQueue : ObservableObject, IDisposable
         return new FileConflictContext(src, dst, isDir, sLen, sMod, dLen, dMod);
     }
 
+    /// <summary>
+    /// The job the one-bar queue view shows: the one copying now, else the next one waiting, else the newest.
+    /// <see cref="Jobs"/> is newest first, so the next to run is the last waiting one.
+    /// </summary>
+    public FileOperationJob? CurrentJob =>
+        Jobs.FirstOrDefault(j => j.Status is JobStatus.Running or JobStatus.Paused)
+        ?? Jobs.LastOrDefault(j => j.Status == JobStatus.Queued)
+        ?? Jobs.FirstOrDefault();
+
+    // Called after every insert, removal and status change (all on the UI thread).
     private void RecalculateActiveCount()
     {
         ActiveJobCount = Jobs.Count(j => j.IsActive);
+        OnPropertyChanged(nameof(CurrentJob));
     }
 
     private static void UpdateJob(FileOperationJob job, Action action) => DispatchUi(action);
