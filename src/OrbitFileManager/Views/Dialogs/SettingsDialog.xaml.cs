@@ -18,6 +18,8 @@ public partial class SettingsDialog : Window
     private readonly AppSettings _settings;
     private readonly ShortcutService? _shortcutService;
     private readonly string _storagePath;
+    private readonly TempFilesService _tempFiles;
+    private readonly bool _useDarkTitleBar;
     private readonly Action<AppThemeMode, AppAccent>? _previewTheme;
     private AppAccent _selectedAccent;
     private bool _initializing = true;
@@ -26,15 +28,16 @@ public partial class SettingsDialog : Window
     public SettingsDialog(
         AppSettings settings,
         ShortcutService? shortcutService,
-        string storagePath,
-        bool isPortable,
+        AppPathsService paths,
         bool useDarkTitleBar,
         Action<AppThemeMode, AppAccent>? previewTheme = null)
     {
         InitializeComponent();
         _settings = settings;
         _shortcutService = shortcutService;
-        _storagePath = storagePath;
+        _storagePath = paths.StorageRoot;
+        _tempFiles = new TempFilesService(paths);
+        _useDarkTitleBar = useDarkTitleBar;
         _previewTheme = previewTheme;
 
         DarkThemeRadio.IsChecked = settings.Theme == AppThemeMode.Dark;
@@ -55,11 +58,13 @@ public partial class SettingsDialog : Window
 
         DefaultPathBox.Text = settings.DefaultStartPath;
 
-        StorageModeHeader.Text = isPortable
-            ? "Portable Storage Active (Data / Logs / Cache)"
-            : "Read-Only Install Folder — Using Local AppData Fallback";
-        StoragePathText.Text = storagePath;
-        StoragePathText.ToolTip = storagePath;
+        StorageModeHeader.Text = paths.IsPortable ? "Data folder (portable, next to the exe)" : "Data folder";
+        StoragePathText.Text = _storagePath;
+        StoragePathText.ToolTip = _storagePath;
+        StorageNoteText.Text = paths.IsPortable
+            ? $"Favorites, settings and tabs stay next to the exe because {AppPathsService.PortableMarkerFileName} is there. Delete that file to keep them in AppData instead."
+            : "Favorites, settings and tabs are kept here, so moving, deleting or downloading the exe again does not lose them.";
+        Loaded += async (_, _) => await MeasureTempFilesAsync();
 
         RefreshShortcutsList();
         SourceInitialized += (_, _) => ThemeService.ApplyWindowTitleBarTheme(this, useDarkTitleBar);
@@ -189,6 +194,47 @@ public partial class SettingsDialog : Window
             }
         }
         catch { }
+    }
+
+    private async Task MeasureTempFilesAsync(string? prefix = null)
+    {
+        ClearTempButton.IsEnabled = false;
+        TempUsage usage = await Task.Run(_tempFiles.Measure);
+        TempSizeText.Text = (prefix ?? string.Empty) + (usage.Files == 0
+            ? "No temporary files."
+            : $"Temporary files: {FileSizeFormatter.FormatBytes(usage.Bytes)} ({usage.Files:N0} files)");
+        ClearTempButton.IsEnabled = usage.Files > 0;
+    }
+
+    private async void ClearTempFiles_Click(object sender, RoutedEventArgs e)
+    {
+        ClearTempButton.IsEnabled = false;
+        TempUsage before = await Task.Run(_tempFiles.Measure);
+        if (before.Files == 0)
+        {
+            await MeasureTempFilesAsync();
+            return;
+        }
+
+        var confirm = new ConfirmActionDialog(
+            "Clear Temp Files",
+            $"Delete {FileSizeFormatter.FormatBytes(before.Bytes)} of temporary files ({before.Files:N0} files): downloaded updates, cache and logs from earlier days?\n\nFavorites, settings and tabs are kept. Files in use are skipped.",
+            "Clear",
+            isDanger: false,
+            _useDarkTitleBar)
+        {
+            Owner = this
+        };
+
+        if (confirm.ShowDialog() != true)
+        {
+            ClearTempButton.IsEnabled = true;
+            return;
+        }
+
+        TempSizeText.Text = "Clearing…";
+        TempUsage cleared = await Task.Run(_tempFiles.Clear);
+        await MeasureTempFilesAsync($"Cleared {FileSizeFormatter.FormatBytes(cleared.Bytes)}. ");
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)

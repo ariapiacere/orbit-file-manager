@@ -1,5 +1,42 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-25 (later) — Data lives in AppData; Settings → Clear Temp Files
+
+Up to 1.2.7 a copy in a writable folder kept `Data`, `Logs` and `Cache` next to the exe. Moving, deleting or
+downloading the exe again started from empty favorites.
+- **Where:** `AppPathsService` now puts the data in `%LOCALAPPDATA%\OrbitFileManager` (`DefaultAppDataRoot`). The
+  exe folder gets nothing.
+  - **Portable mode:** an empty `portable.txt` next to the exe keeps the old layout (`IsPortable`).
+  - **Fallback:** if AppData cannot be created, the data goes next to the exe.
+  - `IsPortableWritable` is gone. The updater uses `CanWriteInstallFolder`, a lazy write probe of the exe folder,
+    so in-place updates still work while the data is in AppData.
+  - `new AppPathsService(root)` still keeps everything inside `root` (tests); `new AppPathsService(install,
+    appData)` is the real layout with both folders given. DI uses a factory (`new AppPathsService()`).
+- **Bringing old data over:** `PortableDataMigration.Run(<exe>\Data, <AppData>\Data)` runs at start when not
+  portable.
+  - Files AppData lacks are copied.
+  - `favorites.json` present in both gets the missing favorites added; the same folder in a different case or
+    with a trailing `\` counts as the same favorite.
+  - Any other file AppData already has is kept.
+  - `*.tmp` files are skipped.
+  - The source folder is never changed or deleted. It is recorded in `Data\migrated-from.txt`, so each folder is
+    read once and a favorite removed later does not come back.
+  - App.OnStartup logs what was brought over (`Storage` category).
+- **Clear Temp Files:** a new "DATA & TEMP FILES" section in Settings shows the data folder and the temp size,
+  with a Clear Temp Files button that asks first. `TempFilesService` deletes:
+  - `%TEMP%\OrbitFileManager-update` (downloaded updates);
+  - everything in `Cache`;
+  - `orbit-*.jsonl` logs except today's;
+  - `*.tmp` in Data older than 1 minute;
+  - sibling folders of the running build's `%TEMP%\.net\<app>\<bundle>`. The running folder is found from the
+    loaded `wpfgfx_cor3.dll` and only when its grandparent is `.net`; a normal dev build skips this part.
+  - Never deleted: anything else in Data. Files in use are skipped, and reparse points are not followed.
+- **Tests:** `StorageLocationTests` (8): AppData default, favorites surviving a deleted exe folder, portable.txt,
+  AppData unusable, one-time migration that leaves the source alone, favorites merge, Clear keeps the right
+  files, files in use. 166 tests pass.
+- **UI harness:** `settings` mode (9 checks) covers the dialog, confirmation and clearing. The harness bin folder
+  has a `portable.txt` so harness runs don't write to the real AppData.
+
 ## 2026-11-25 — Drives plugged in or removed show up without a restart
 
 The drive list and folder tree were built at startup (and on F5) only, so a newly plugged external disk needed a

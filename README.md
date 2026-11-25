@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Architecture & Portable Layout
+## 1. Architecture & Data Layout
 
 - **UI & Presentation**: Native WPF (`PerMonitorV2` high-DPI aware, virtualized `ListView` / `GridView` / `WrapPanel` templates, runtime Dark/Light `ResourceDictionary` switching, Win32 DWM dark titlebar integration).
 - **MVVM Layer**: `MainViewModel`, `BrowserPaneViewModel`, `BrowserTabViewModel`, and `FolderTreeNodeViewModel` powered by `CommunityToolkit.Mvvm`.
@@ -16,15 +16,21 @@
   - `PreviewService` & `ThumbnailService`: `IShellItemImageFactory` shell thumbnails with bounded LRU caching, zoomable/checkerboard image preview, non-locking 64 KB text/code preview, PDF header/page visual preview, Windows Property System (`IPropertyStore`) audio/video metadata, and binary PE/hex signature inspection.
   - `ChecksumService`, `DuplicateFinderService`, `FolderSizeAnalyzerService`, `ShortcutService`: Single-pass streaming MD5/SHA-1/SHA-256/SHA-512 calculator, 3-stage byte-exact duplicate finder, junction-safe recursive disk usage analyzer, and customizable shortcuts.
 
-### Portable Directory Structure
+### Where Orbit keeps its data
 
-Since 1.2.0 Orbit is **one self-contained `OrbitFileManager.exe`** (about 155 MB). It runs on any Windows 10/11 x64 PC without installing .NET. Put it in a folder of its own: on first start it creates `Data`, `Logs` and `Cache` next to itself. (WPF's native libraries, about 8 MB, are unpacked once to `%TEMP%\.net\OrbitFileManager`.)
+Since 1.2.0 Orbit is **one self-contained `OrbitFileManager.exe`** (about 155 MB). It runs on any Windows 10/11 x64 PC without installing .NET. (WPF's native libraries, about 8 MB, are unpacked once to `%TEMP%\.net\OrbitFileManager`.)
 
-When `OrbitFileManager.exe` runs in a writable folder, all state stays self-contained alongside the executable (if launched from a read-only folder such as `Program Files`, it automatically falls back to `%LOCALAPPDATA%\OrbitFileManager`):
+Since 1.2.8 favorites, settings, tabs and logs live in `%LOCALAPPDATA%\OrbitFileManager`, not next to the exe. Moving the exe, deleting it or downloading it again keeps them.
+
+- **Older copies:** a copy up to 1.2.7 kept a `Data` folder next to the exe. The first start of 1.2.8 brings it over:
+  - files AppData does not have yet are copied;
+  - favorites missing from AppData are added;
+  - the old folder is left as it was.
+- **Portable mode:** put an empty file named `portable.txt` next to the exe to keep everything beside it (for example on a USB stick). Orbit also falls back to the exe folder if it cannot create the AppData folder.
+- **Settings → Data & Temp Files** opens the data folder and shows how much temporary space Orbit uses: downloaded updates, cache, logs from earlier days and native libraries of older builds. **Clear Temp Files** deletes them after asking. Favorites, settings and tabs are never touched.
 
 ```text
-OrbitFileManager/
-├── OrbitFileManager.exe
+%LOCALAPPDATA%\OrbitFileManager\     (or the exe folder in portable mode)
 ├── Data/
 │   ├── settings.json         # Theme, columns, toolbar customization, window bounds
 │   ├── sessions.json         # Open tabs (folder, pin/lock, label, view, sort, selection, history), panes. Saved continuously
@@ -33,7 +39,8 @@ OrbitFileManager/
 │   ├── favorites.json        # User pinned favorite folders
 │   ├── item_metadata.json    # Per-file/folder color tags & custom notes
 │   ├── search_presets.json   # Saved advanced search queries
-│   └── shortcuts.json        # Customizable keyboard bindings
+│   ├── shortcuts.json        # Customizable keyboard bindings
+│   └── migrated-from.txt     # Old portable Data folders already brought over (each is read once)
 ├── Logs/
 │   └── orbit-YYYYMMDD.jsonl  # Structured JSON Lines diagnostic logs
 └── Cache/                    # Runtime cache directory
@@ -159,7 +166,7 @@ The update window shows the release notes, downloads the zip, checks its SHA-256
 
 Installs from 1.1.x and earlier are a folder of about 470 files. Their updater copies the new exe over the old one; on its first start the new exe removes the old files. It deletes only the exact names that 1.0.x–1.1.x shipped, and only in a folder that still holds `OrbitFileManager.dll`.
 
-Orbit can only update itself when it runs from a folder it can write to (the portable layout). A copy inside `Program Files` shows a link to the release page instead.
+Orbit can only update itself when its exe is in a folder it can write to. A copy inside `Program Files` shows a link to the release page instead.
 
 GitHub allows 60 API requests an hour per network without a token, shared by every PC behind the same public IP. Orbit therefore reads the latest version from the `releases/latest` page first and only calls the API when a newer version exists. If the API refuses, the update still installs from the release's download links; the update window then points to the release page for the notes.
 

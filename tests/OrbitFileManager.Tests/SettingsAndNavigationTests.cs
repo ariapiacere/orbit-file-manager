@@ -24,7 +24,7 @@ public sealed class SettingsAndNavigationTests : IDisposable
         string portableAppRoot = Path.Combine(_tempRoot, "PortableInstall");
         var paths = new AppPathsService(portableAppRoot);
 
-        Assert.True(paths.IsPortableWritable);
+        Assert.True(paths.IsPortable);
         Assert.True(Directory.Exists(paths.DataDirectory));
         Assert.True(Directory.Exists(paths.LogsDirectory));
         Assert.True(Directory.Exists(paths.CacheDirectory));

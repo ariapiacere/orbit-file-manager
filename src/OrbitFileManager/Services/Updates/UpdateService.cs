@@ -57,8 +57,8 @@ public sealed class UpdateService
         _logger = logger;
     }
 
-    /// <summary>A portable install updates in place; a read-only folder (e.g. Program Files) cannot.</summary>
-    public bool CanInstallInPlace => _paths.IsPortableWritable;
+    /// <summary>An exe in a folder Orbit can write to updates in place; a read-only folder (e.g. Program Files) cannot.</summary>
+    public bool CanInstallInPlace => _paths.CanWriteInstallFolder;
 
     public static string UpdateRoot => Path.Combine(Path.GetTempPath(), "OrbitFileManager-update");
     private static string ResultFilePath => Path.Combine(UpdateRoot, "last-update-result.txt");

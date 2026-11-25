@@ -204,7 +204,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public string UpdateBadgeText => AvailableUpdate is null ? string.Empty : $"Update to {UpdateService.Format(AvailableUpdate.Version)}";
     public string AppVersionText => $"Orbit {UpdateService.Format(UpdateService.CurrentVersion)}";
 
-    public string StorageModeBadge => _pathsService.IsPortableWritable ? "Portable" : "AppData";
+    public string StorageModeBadge => _pathsService.IsPortable ? "Portable" : "AppData";
     public string StorageRootPath => _pathsService.StorageRoot;
 
     // Virtual hook so Phase 3 FileOperationQueue can intercept transfers cleanly
@@ -356,7 +356,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
         StartSessionAutoSave();
         StartDriveWatcher();
-        _logger.Info("App", "Orbit File Manager initialized.", new { dualPane = IsDualPane, portable = _pathsService.IsPortableWritable, version = UpdateService.Format(UpdateService.CurrentVersion) });
+        _logger.Info("App", "Orbit File Manager initialized.", new { dualPane = IsDualPane, portable = _pathsService.IsPortable, dataFolder = _pathsService.StorageRoot, version = UpdateService.Format(UpdateService.CurrentVersion) });
 
         ReportLastUpdateResult();
         _ = CheckForUpdatesOnStartupAsync();
@@ -1883,8 +1883,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         bool saved = _dialogService.ShowSettingsDialog(
             _settingsService.Current,
             _shortcutService,
-            _pathsService.StorageRoot,
-            _pathsService.IsPortableWritable);
+            _pathsService);
 
         if (!saved)
             return;

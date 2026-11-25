@@ -113,21 +113,45 @@
                             <TextBox x:Name="DefaultPathBox" Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,6" />
                             <TextBlock x:Name="PathErrorText" Foreground="{DynamicResource DangerBrush}" FontSize="11.5" Visibility="Collapsed" Margin="0,0,0,8" />
 
-                            <!-- Portable Data Location -->
-                            <Border Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,8,0,0">
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right"
-                                            Content="Open Data Folder"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Padding="10,4"
-                                            Margin="10,0,0,0"
-                                            VerticalAlignment="Center"
-                                            Click="OpenStorageFolder_Click" />
-                                    <StackPanel>
-                                        <TextBlock x:Name="StorageModeHeader" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
-                                        <TextBlock x:Name="StoragePathText" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
-                                    </StackPanel>
-                                </DockPanel>
+                            <!-- Data folder and temporary files -->
+                            <TextBlock Text="DATA &amp; TEMP FILES" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMutedBrush}" Margin="0,10,0,6" />
+                            <Border Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,0">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right"
+                                                Content="Open Data Folder"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Padding="10,4"
+                                                Margin="10,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Click="OpenStorageFolder_Click" />
+                                        <StackPanel>
+                                            <TextBlock x:Name="StorageModeHeader" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                                            <TextBlock x:Name="StoragePathText" FontSize="11.5" Foreground="{DynamicResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                            <TextBlock x:Name="StorageNoteText" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <Border Height="1" Background="{DynamicResource BorderSubtleBrush}" Margin="0,10,0,10" />
+
+                                    <DockPanel>
+                                        <Button x:Name="ClearTempButton"
+                                                DockPanel.Dock="Right"
+                                                Content="Clear Temp Files"
+                                                AutomationProperties.Name="Clear Temp Files"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Padding="10,4"
+                                                Margin="10,0,0,0"
+                                                VerticalAlignment="Center"
+                                                IsEnabled="False"
+                                                Click="ClearTempFiles_Click" />
+                                        <StackPanel>
+                                            <TextBlock x:Name="TempSizeText" Text="Temporary files: measuring…" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+                                            <TextBlock Text="Downloaded updates, cache and logs from earlier days. Favorites, settings and tabs are kept."
+                                                       FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </StackPanel>
                             </Border>
                         </StackPanel>
                     </ScrollViewer>

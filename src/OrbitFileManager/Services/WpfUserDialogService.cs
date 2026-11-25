@@ -84,10 +84,10 @@ public sealed class WpfUserDialogService : IUserDialogService
             Show();
     }
 
-    public bool ShowSettingsDialog(AppSettings currentSettings, ShortcutService? shortcutService, string storagePath, bool isPortable)
+    public bool ShowSettingsDialog(AppSettings currentSettings, ShortcutService? shortcutService, AppPathsService paths)
     {
         var dialog = new SettingsDialog(
-            currentSettings, shortcutService, storagePath, isPortable, _themeService.CurrentTheme == AppThemeMode.Dark,
+            currentSettings, shortcutService, paths, _themeService.CurrentTheme == AppThemeMode.Dark,
             previewTheme: (mode, accent) => _themeService.ApplyTheme(mode, accent))
         {
             Owner = GetActiveOwnerWindow()

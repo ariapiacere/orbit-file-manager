@@ -26,6 +26,12 @@ public partial class App : Application
         _serviceProvider = services.BuildServiceProvider();
 
         var logger = _serviceProvider.GetRequiredService<StructuredLogger>();
+        if (_serviceProvider.GetRequiredService<AppPathsService>().Migration is { ChangedAnything: true } migration)
+        {
+            logger.Info("Storage", "Brought the data of an older portable copy into this data folder.",
+                new { from = migration.SourceDirectory, copied = migration.CopiedFiles, favoritesAdded = migration.FavoritesAdded });
+        }
+
         DispatcherUnhandledException += (_, args) =>
         {
             logger.Error("App", "Unhandled UI exception.", args.Exception);
@@ -74,7 +80,7 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<AppPathsService>();
+        services.AddSingleton(_ => new AppPathsService());
         services.AddSingleton<StructuredLogger>();
         services.AddSingleton<SettingsService>();
         services.AddSingleton<ShortcutService>();
