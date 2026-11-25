@@ -1,5 +1,26 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-25 — Drives plugged in or removed show up without a restart
+
+The drive list and folder tree were built at startup (and on F5) only, so a newly plugged external disk needed a
+restart.
+- **Detection:** `Services/FileSystem/DriveWatcher` raises `DrivesChanged` when one of two things happens:
+  - The drive letters change. `Environment.GetLogicalDrives` reads a bitmask with no disk access and is
+    checked every 2 s. This covers USB disks and mapped or unmapped network drives.
+  - MainWindow's `WM_DEVICECHANGE` hook forwards `DBT_DEVICEARRIVAL`/`DBT_DEVICEREMOVECOMPLETE`. That is instant
+    and also covers a card put into a reader that already has a letter. It is debounced 800 ms, then raised
+    even if the letters are unchanged.
+- **Refresh:** `MainViewModel.RefreshDrivesInPlaceAsync` reads the drives off the UI thread (a dead mapped
+  drive can block for seconds) and merges:
+  - The drive list is replaced.
+  - Tree roots of drives that are still there keep their node, so expanded folders stay expanded.
+  - Gone or not-ready roots are removed and new ones inserted in drive order.
+  - The status bar says "Drive connected: …" / "Drive removed: …".
+  - F5 still does the full rebuild (`RefreshDrivesAndTree`).
+- **Tests:** `DriveWatcherTests` (5). The UI harness `drives` mode simulates a disk with `subst Z: <folder>` (11
+  checks): it appears in about 1.2 s, opens, C: stays the same expanded node, and it is removed in about 1.2 s.
+  The harness always removes the subst drive.
+
 ## 2026-11-19 (night) — Favorites docked at the top of the sidebar
 
 - **Layout:** the sidebar is now a two-row `Grid` (`SidebarRoot`).

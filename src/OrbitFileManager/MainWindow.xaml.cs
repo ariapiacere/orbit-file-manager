@@ -49,7 +49,11 @@ public partial class MainWindow : Window
         ApplyInitialWindowPlacement(_settingsService.Current);
 
         SourceInitialized += (_, _) =>
+        {
             ThemeService.ApplyWindowTitleBarTheme(this, _settingsService.Current.Theme == AppThemeMode.Dark);
+            // Windows broadcasts WM_DEVICECHANGE when a drive (or a card in a reader) arrives or goes away.
+            System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle)?.AddHook(OnWindowMessage);
+        };
 
         _viewModel.RequestSelectAllInActiveList += () => GetActivePaneControl().SelectAllItems();
         _viewModel.RequestFocusAddressBar += () => GetActivePaneControl().FocusAddressBar();
@@ -343,6 +347,18 @@ public partial class MainWindow : Window
         {
             _ = _viewModel.NavigateToPathAsync(node.FullPath);
         }
+    }
+
+    private const int WM_DEVICECHANGE = 0x0219;
+    private const long DBT_DEVICEARRIVAL = 0x8000;
+    private const long DBT_DEVICEREMOVECOMPLETE = 0x8004;
+
+    private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        // A volume (USB disk, card in a reader) arrived or went away: refresh the drive list and tree.
+        if (msg == WM_DEVICECHANGE && wParam.ToInt64() is DBT_DEVICEARRIVAL or DBT_DEVICEREMOVECOMPLETE)
+            _viewModel.OnDeviceChange();
+        return IntPtr.Zero;
     }
 
     private void SidebarTreeView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)

@@ -355,6 +355,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _ => "Ready"
         };
         StartSessionAutoSave();
+        StartDriveWatcher();
         _logger.Info("App", "Orbit File Manager initialized.", new { dualPane = IsDualPane, portable = _pathsService.IsPortableWritable, version = UpdateService.Format(UpdateService.CurrentVersion) });
 
         ReportLastUpdateResult();
@@ -576,6 +577,107 @@ public partial class MainViewModel : ObservableObject, IDisposable
                     _shellService,
                     _settingsService));
             }
+        }
+
+        if (ActiveTab is not null)
+            UpdateDriveSpaceSummary(ActiveTab.CurrentPath);
+    }
+
+    // ─── Drives plugged in / removed while Orbit runs ──────────────────────────
+
+    private DriveWatcher? _driveWatcher;
+    private int _driveRefreshVersion;
+
+    private void StartDriveWatcher()
+    {
+        if (_disposed || _driveWatcher is not null || Application.Current?.Dispatcher is not { } dispatcher)
+            return;
+
+        _driveWatcher = new DriveWatcher();
+        _driveWatcher.DrivesChanged += () => dispatcher.InvokeAsync(() => _ = RefreshDrivesInPlaceAsync());
+        _driveWatcher.Start();
+    }
+
+    /// <summary>MainWindow forwards Windows' device-change broadcast (a drive or its media came or went).</summary>
+    public void OnDeviceChange() => _driveWatcher?.NotifyDeviceChange();
+
+    /// <summary>
+    /// Re-reads the drives off the UI thread (a mapped drive whose server is gone can take seconds) and only adds or
+    /// removes what changed, so expanded folders in the tree stay expanded. Unlike F5, which rebuilds everything.
+    /// </summary>
+    public async Task RefreshDrivesInPlaceAsync()
+    {
+        if (_disposed)
+            return;
+
+        int version = ++_driveRefreshVersion;
+        bool includeHidden = _settingsService.Current.ShowHiddenFiles;
+        bool includeSystem = _settingsService.Current.ShowSystemFiles;
+        var known = FolderTreeRoots.Select(n => n.FullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        List<(DriveEntryItem Drive, bool HasChildren)> fresh = await Task.Run(() =>
+            _browserService.GetConnectedDrives()
+                .Select(d => (d, d.IsReady && !known.Contains(d.RootPath) &&
+                                 _browserService.HasAccessibleSubdirectories(d.RootPath, includeHidden, includeSystem)))
+                .ToList());
+
+        if (_disposed || version != _driveRefreshVersion)
+            return; // a newer refresh is on its way
+
+        var before = Drives.Select(d => d.RootPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var after = fresh.Select(f => f.Drive.RootPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // The drive list holds no state of its own (just capacity bars), so it is simply replaced.
+        Drives.Clear();
+        foreach (var (drive, _) in fresh)
+            Drives.Add(drive);
+
+        // Tree: keep the nodes of drives that are still there (with their expanded folders), drop the rest,
+        // add new ones, all in drive order.
+        var ready = fresh.Where(f => f.Drive.IsReady).ToList();
+        var readyRoots = ready.Select(f => f.Drive.RootPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        for (int i = FolderTreeRoots.Count - 1; i >= 0; i--)
+        {
+            if (!readyRoots.Contains(FolderTreeRoots[i].FullPath))
+                FolderTreeRoots.RemoveAt(i);
+        }
+
+        for (int i = 0; i < ready.Count; i++)
+        {
+            var (drive, hasChildren) = ready[i];
+            int existing = -1;
+            for (int j = 0; j < FolderTreeRoots.Count; j++)
+            {
+                if (string.Equals(FolderTreeRoots[j].FullPath, drive.RootPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    existing = j;
+                    break;
+                }
+            }
+
+            if (existing < 0)
+            {
+                FolderTreeRoots.Insert(Math.Min(i, FolderTreeRoots.Count), new FolderTreeNodeViewModel(
+                    drive.DisplayLabel, drive.RootPath, drive.Icon, isDriveRoot: true, mayHaveChildren: hasChildren,
+                    _browserService, _shellService, _settingsService));
+            }
+            else if (existing != i && i < FolderTreeRoots.Count)
+            {
+                FolderTreeRoots.Move(existing, i);
+            }
+        }
+
+        var added = fresh.Where(f => !before.Contains(f.Drive.RootPath)).Select(f => f.Drive.DisplayLabel).ToList();
+        var removed = before.Where(r => !after.Contains(r)).Select(r => r.TrimEnd('\\')).ToList();
+        if (added.Count > 0 || removed.Count > 0)
+        {
+            var parts = new List<string>();
+            if (added.Count > 0)
+                parts.Add($"Drive connected: {string.Join(", ", added)}");
+            if (removed.Count > 0)
+                parts.Add($"Drive removed: {string.Join(", ", removed)}");
+            StatusMessage = string.Join(". ", parts) + ".";
+            _logger.Info("Drives", "Drives changed while running.", new { added, removed });
         }
 
         if (ActiveTab is not null)
@@ -2242,6 +2344,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
             return;
 
         _disposed = true;
+        _driveWatcher?.Dispose();
+        _driveWatcher = null;
         _sessionAutoSaver?.Dispose(); // the window saved the final session just before
         _sessionAutoSaver = null;
         CancellationHelper.CancelAndClear(ref _previewCts);
