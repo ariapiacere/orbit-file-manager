@@ -14,6 +14,7 @@
         <converters:BooleanToVisibilityExConverter x:Key="BoolToVis" />
         <converters:NullOrEmptyToVisibilityConverter x:Key="NullToVis" />
         <converters:EnumEqualsToVisibilityConverter x:Key="EnumToVis" />
+        <converters:ItemsForViewModeConverter x:Key="ItemsForView" />
         <converters:CutOpacityConverter x:Key="CutOpacity" />
         <converters:HexStringToBrushConverter x:Key="HexToBrush" />
 
@@ -445,13 +446,13 @@
 
                 <!-- 1. DETAILS VIEW -->
                 <ListView x:Name="DetailsListView"
-                          ItemsSource="{Binding ActiveTab.DisplayedItems}"
                           Background="Transparent"
                           BorderThickness="0"
                           SelectionMode="Extended"
                           ItemContainerStyle="{StaticResource ModernFileListItemStyle}"
                           VirtualizingStackPanel.IsVirtualizing="True"
                           VirtualizingStackPanel.VirtualizationMode="Recycling"
+                          VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                           Tag="{Binding MainVm, ElementName=PaneRoot}"
                           ContextMenu="{StaticResource PaneFileContextMenu}"
                           Visibility="{Binding ActiveTab.ViewMode, Converter={StaticResource EnumToVis}, ConverterParameter=Details}"
@@ -460,6 +461,13 @@
                           MouseDoubleClick="FileListView_MouseDoubleClick"
                           PreviewMouseDown="FileListView_PreviewMouseDown"
                           PreviewMouseMove="FileListView_PreviewMouseMove">
+                    <!-- Only the view that is showing gets the rows (see ItemsForViewModeConverter) -->
+                    <ListView.ItemsSource>
+                        <MultiBinding Converter="{StaticResource ItemsForView}" ConverterParameter="Details">
+                            <Binding Path="ActiveTab.DisplayedItems" />
+                            <Binding Path="ActiveTab.ViewMode" />
+                        </MultiBinding>
+                    </ListView.ItemsSource>
                     <ListView.GroupStyle>
                         <StaticResource ResourceKey="FileCategoryGroupStyle" />
                     </ListView.GroupStyle>
@@ -607,7 +615,6 @@
 
                 <!-- 2. LIST VIEW (Multi-Column Vertical Wrap) -->
                 <ListView x:Name="CompactListView"
-                          ItemsSource="{Binding ActiveTab.DisplayedItems}"
                           Background="Transparent"
                           BorderThickness="0"
                           SelectionMode="Extended"
@@ -621,6 +628,13 @@
                           MouseDoubleClick="FileListView_MouseDoubleClick"
                           PreviewMouseDown="FileListView_PreviewMouseDown"
                           PreviewMouseMove="FileListView_PreviewMouseMove">
+                    <!-- Only the view that is showing gets the rows (see ItemsForViewModeConverter) -->
+                    <ListView.ItemsSource>
+                        <MultiBinding Converter="{StaticResource ItemsForView}" ConverterParameter="List">
+                            <Binding Path="ActiveTab.DisplayedItems" />
+                            <Binding Path="ActiveTab.ViewMode" />
+                        </MultiBinding>
+                    </ListView.ItemsSource>
                     <ListView.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Vertical" ItemWidth="220" />
@@ -639,7 +653,6 @@
 
                 <!-- 3. SMALL ICONS VIEW -->
                 <ListView x:Name="SmallIconsListView"
-                          ItemsSource="{Binding ActiveTab.DisplayedItems}"
                           Background="Transparent"
                           BorderThickness="0"
                           SelectionMode="Extended"
@@ -652,6 +665,13 @@
                           MouseDoubleClick="FileListView_MouseDoubleClick"
                           PreviewMouseDown="FileListView_PreviewMouseDown"
                           PreviewMouseMove="FileListView_PreviewMouseMove">
+                    <!-- Only the view that is showing gets the rows (see ItemsForViewModeConverter) -->
+                    <ListView.ItemsSource>
+                        <MultiBinding Converter="{StaticResource ItemsForView}" ConverterParameter="SmallIcons">
+                            <Binding Path="ActiveTab.DisplayedItems" />
+                            <Binding Path="ActiveTab.ViewMode" />
+                        </MultiBinding>
+                    </ListView.ItemsSource>
                     <ListView.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal" ItemWidth="185" ItemHeight="32" />
@@ -669,7 +689,6 @@
 
                 <!-- 4. LARGE ICONS VIEW -->
                 <ListView x:Name="LargeIconsListView"
-                          ItemsSource="{Binding ActiveTab.DisplayedItems}"
                           Background="Transparent"
                           BorderThickness="0"
                           SelectionMode="Extended"
@@ -682,6 +701,13 @@
                           MouseDoubleClick="FileListView_MouseDoubleClick"
                           PreviewMouseDown="FileListView_PreviewMouseDown"
                           PreviewMouseMove="FileListView_PreviewMouseMove">
+                    <!-- Only the view that is showing gets the rows (see ItemsForViewModeConverter) -->
+                    <ListView.ItemsSource>
+                        <MultiBinding Converter="{StaticResource ItemsForView}" ConverterParameter="LargeIcons">
+                            <Binding Path="ActiveTab.DisplayedItems" />
+                            <Binding Path="ActiveTab.ViewMode" />
+                        </MultiBinding>
+                    </ListView.ItemsSource>
                     <ListView.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal" ItemWidth="122" ItemHeight="112" />
@@ -700,7 +726,6 @@
 
                 <!-- 5. THUMBNAILS VIEW -->
                 <ListView x:Name="ThumbnailsListView"
-                          ItemsSource="{Binding ActiveTab.DisplayedItems}"
                           Background="Transparent"
                           BorderThickness="0"
                           SelectionMode="Extended"
@@ -713,6 +738,13 @@
                           MouseDoubleClick="FileListView_MouseDoubleClick"
                           PreviewMouseDown="FileListView_PreviewMouseDown"
                           PreviewMouseMove="FileListView_PreviewMouseMove">
+                    <!-- Only the view that is showing gets the rows (see ItemsForViewModeConverter) -->
+                    <ListView.ItemsSource>
+                        <MultiBinding Converter="{StaticResource ItemsForView}" ConverterParameter="Thumbnails">
+                            <Binding Path="ActiveTab.DisplayedItems" />
+                            <Binding Path="ActiveTab.ViewMode" />
+                        </MultiBinding>
+                    </ListView.ItemsSource>
                     <ListView.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel Orientation="Horizontal" ItemWidth="148" ItemHeight="144" />

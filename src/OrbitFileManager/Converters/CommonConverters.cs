@@ -75,6 +75,26 @@ public sealed class EnumEqualsToVisibilityConverter : IValueConverter
         Binding.DoNothing;
 }
 
+/// <summary>
+/// Gives a view's list its rows only while that view mode is showing; the hidden views get null. Each pane has
+/// five list views (Details, List, Small, Large, Thumbnails). When all five were bound to the same rows, every
+/// reload paid for the four hidden ones too: about 3.5 s instead of 60 ms for 5,000 files.
+/// Values: [0] the rows, [1] the tab's view mode. Parameter: the view mode this list shows.
+/// </summary>
+public sealed class ItemsForViewModeConverter : IMultiValueConverter
+{
+    public object? Convert(object?[] values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Length < 2 || values[0] is not System.Collections.IEnumerable items || values[1] is null || parameter is null)
+            return null;
+
+        return string.Equals(values[1]!.ToString(), parameter.ToString(), StringComparison.OrdinalIgnoreCase) ? items : null;
+    }
+
+    public object?[] ConvertBack(object? value, Type[] targetTypes, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 public sealed class EnumEqualsToBooleanConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

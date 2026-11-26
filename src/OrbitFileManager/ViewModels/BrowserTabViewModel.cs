@@ -129,7 +129,7 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _canGoUp;
 
-    public ObservableCollection<FileEntryItem> DisplayedItems { get; } = [];
+    public BulkObservableCollection<FileEntryItem> DisplayedItems { get; } = [];
     public ObservableCollection<BreadcrumbSegment> Breadcrumbs { get; } = [];
 
     public IReadOnlyList<FileEntryItem> SelectedItems { get; private set; } = [];
@@ -666,23 +666,22 @@ public partial class BrowserTabViewModel : ObservableObject, IDisposable
 
         var sorted = SortEntries(query, SortColumn, SortDescending);
 
-        DisplayedItems.Clear();
+        // One Reset for the whole list: adding rows one at a time cost seconds for a few thousand files.
+        DisplayedItems.ReplaceAll(sorted);
 
         // Normalized once here instead of per row: item paths come from the file system already normalized.
-        Dictionary<string, int>? wanted = null;
+        var matches = new List<(int Rank, FileEntryItem Item)>();
         if (pathsToSelect is { Count: > 0 })
         {
-            wanted = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var wanted = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < pathsToSelect.Count; i++)
                 wanted.TryAdd(PathValidator.NormalizePath(pathsToSelect[i]), i);
-        }
 
-        var matches = new List<(int Rank, FileEntryItem Item)>();
-        foreach (var item in sorted)
-        {
-            DisplayedItems.Add(item);
-            if (wanted is not null && wanted.TryGetValue(item.FullPath, out int rank))
-                matches.Add((rank, item));
+            foreach (var item in sorted)
+            {
+                if (wanted.TryGetValue(item.FullPath, out int rank))
+                    matches.Add((rank, item));
+            }
         }
 
         DisplayedItemCount = DisplayedItems.Count;

@@ -1,5 +1,45 @@
 # Engineering Handoff — Orbit File Manager (For Claude)
 
+## 2026-11-26 — Big folders open without freezing
+
+A folder of 1,000+ files froze the window while it loaded. On the dev PC, before → after:
+
+| Details view | Before | After |
+|---|---|---|
+| 1,500 files | 4.1 s | 0.07 s |
+| 5,000 files | 8.9–10 s | 0.05 s |
+| 15,000 files | 65–87 s | about 0.1 s |
+
+The times are open / F5 / sort, longest UI stall. Sort froze as long as open, so the cost was on the UI thread,
+not in reading the folder.
+- **Cause 1, all five views were bound:** each pane has five `ListView`s (Details, List, Small, Large,
+  Thumbnails), and all were bound to `DisplayedItems`, including the four Collapsed ones. Refilling 5,000 rows
+  took:
+  - 3.5 s with all five bound;
+  - about 0.45 s for each hidden WrapPanel view bound alone;
+  - 62 ms with Details alone;
+  - 4 ms with none.
+  - **Fix:** `ItemsSource` is now a `MultiBinding` (`DisplayedItems`, `ViewMode`) through
+    `ItemsForViewModeConverter`, so only the showing view gets the rows and the hidden ones get null.
+    `FileListView_SelectionChanged` already ignores a list that is not Visible, so switching view keeps the
+    selection.
+- **Cause 2, one notice per row:** `ApplyFilterAndSort` cleared and then added rows one at a time.
+  `DisplayedItems` is now a `BulkObservableCollection` and `ReplaceAll` raises a single Reset. Search results
+  still append per batch with `Add`.
+- **Cause 3, grouping turned off virtualization:** Group by type disabled row virtualization (1,500 files 1.4 s,
+  5,000 files 4 s). `DetailsListView` now has `VirtualizingPanel.IsVirtualizingWhenGrouping="True"`, so grouped
+  loads also take about 0.1 s for 15,000 files.
+- **Still slow-ish:** List / Small icons / Large icons / Thumbnails use a plain `WrapPanel`, which creates every
+  tile. Large icons takes 0.5 s for 1,500 files, 1 s for 5,000 and 3 s for 15,000. Making those views virtual
+  needs a virtualizing wrap panel (not built in to WPF).
+- **Tests:** `BigFolderListTests` (6). 172 tests pass.
+- **UI harness:**
+  - `bigfolder` mode times open, F5 and sort for 1,500 / 5,000 / 15,000 files. `BIG_VIEWS`, `BIG_SIZES` and
+    `BIG_GROUP=1` choose the view, the folder sizes and grouping.
+  - `viewswitch` mode (11 checks) covers: rows only in the showing view, selection kept across view switches and
+    F5, grouping (virtualized: 77 of 1,520 rows created), and quick filter.
+  - `newfolder`, `renamejump` and `fitcolumns` still pass.
+
 ## 2026-11-25 (later) — Data lives in AppData; Settings → Clear Temp Files
 
 Up to 1.2.7 a copy in a writable folder kept `Data`, `Logs` and `Cache` next to the exe. Moving, deleting or
@@ -372,9 +412,7 @@ renders windows with `RenderTargetBitmap`. Mouse and keyboard injection does not
     share can stop sending change notices without an error, or never send them for changes made on the server.
   - The UI harness `autorefresh` mode covers all of this, including a loopback `\\localhost\C$` share. 18 checks;
     the old code fails 7.
-  - Known slow spot, not fixed: a load adds rows to `DisplayedItems` one at a time on the UI thread. On the dev
-    PC a local folder of 4,000 .txt files reloads in about 4 s and one of 15,000 in about 22 s, and the window is
-    unresponsive meanwhile.
+  - The slow big-folder load noted here was fixed on 2026-11-26 (see that section).
 - Theme: "Graphite & Signal Orange". Accent `#FF7A1A` on warm graphite in dark mode, `#EA580C` on zinc greys
   in light mode. Accent buttons use dark ink (`AccentForegroundBrush` `#1A1108`). Danger is rose so it never
   reads as the accent.
